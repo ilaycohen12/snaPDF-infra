@@ -22,3 +22,8 @@ output "node_group_role_arn" {
   description = "IAM role ARN of the worker nodes — used to attach extra policies"
   value       = module.eks.eks_managed_node_groups["default"].iam_role_arn
 }
+
+output "node_security_group_id" {
+  description = "Security group ID of the EKS worker nodes — used by RDS to allow port 5432 from nodes only"
+  value       = module.eks.node_security_group_id
+}
