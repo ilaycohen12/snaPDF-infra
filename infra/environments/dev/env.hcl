@@ -1,0 +1,10 @@
+# ============================================================
+# env.hcl — Dev environment values
+# Read by every module inside environments/dev/ via read_terragrunt_config()
+# ============================================================
+
+locals {
+  env_name           = "dev"              # environment label — used in resource names and tags
+  cluster_name       = "projectview-dev"  # EKS cluster name as it will appear in AWS
+  node_instance_type = "t3.small"         # EC2 instance type for worker nodes
+}
