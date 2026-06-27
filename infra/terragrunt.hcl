@@ -12,6 +12,10 @@ locals {
 # Block 2 — Where to store Terraform state files
 remote_state {
   backend = "s3"                                                # use S3 as the backend (not local file)
+  generate = {
+    path      = "backend.tf"                                    # Terragrunt auto-creates this file in each module before running
+    if_exists = "overwrite"                                     # overwrite every run to keep it in sync
+  }
   config = {
     bucket       = local.bucket                                 # the S3 bucket we created in Phase 0
     key          = "${path_relative_to_include()}/terraform.tfstate" # unique path per module e.g. environments/dev/vpc/terraform.tfstate
