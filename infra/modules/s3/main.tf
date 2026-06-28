@@ -2,7 +2,7 @@ data "aws_caller_identity" "current" {}
 
 resource "aws_s3_bucket" "pdfs" {
   bucket = "${var.cluster_name}-pdfs-${data.aws_caller_identity.current.account_id}"
-  # e.g. "projectview-dev-pdfs-086241318869"
+  # e.g. "snapdf-dev-pdfs-086241318869"
   # account ID appended because S3 bucket names must be globally unique across all AWS accounts
 
   tags = {

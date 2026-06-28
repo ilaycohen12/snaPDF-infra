@@ -4,6 +4,6 @@ variable "env_name" {
 }
 
 variable "cluster_name" {
-  description = "Cluster name — used to name the queues e.g. projectview-dev-signed"
+  description = "Cluster name — used to name the queues e.g. snapdf-dev-signed"
   type        = string
 }

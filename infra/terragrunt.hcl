@@ -6,7 +6,7 @@
 locals {
   aws_region = "us-east-1"                                     # the AWS region for everything in this project
   account_id = "086241318869"                                   # your AWS account ID
-  bucket     = "projectview-tf-state-${local.account_id}"      # S3 bucket name — built from account_id for global uniqueness
+  bucket     = "snapdf-tf-state-${local.account_id}"      # S3 bucket name — built from account_id for global uniqueness
 }
 
 # Block 2 — Where to store Terraform state files

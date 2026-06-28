@@ -10,7 +10,7 @@ resource "aws_iam_openid_connect_provider" "github" {
 
 # ── GitHub Actions CI Role ────────────────────────────────────────────────────
 # This role is assumed by GitHub Actions during CI runs.
-# Trust is locked to the ProjectView repo on the main branch only.
+# Trust is locked to the snaPDF repo on the main branch only.
 
 resource "aws_iam_role" "github_actions_ci" {
   name = "github-actions-ci"
@@ -24,13 +24,13 @@ resource "aws_iam_role" "github_actions_ci" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:ilaycohen12/ProjectView:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub" = "repo:ilaycohen12/snaPDF:ref:refs/heads/main"
         }
       }
     }]
   })
 
-  tags = { Project = "projectview", ManagedBy = "terragrunt" }
+  tags = { Project = "snapdf", ManagedBy = "terragrunt" }
 }
 
 # Policy — CI needs to push images to ECR and restart deployments on EKS
@@ -58,7 +58,7 @@ resource "aws_iam_policy" "github_actions_ci" {
           "ecr:BatchGetImage",
           "ecr:GetDownloadUrlForLayer"
         ]
-        Resource = "arn:aws:ecr:us-east-1:086241318869:repository/projectview-app"
+        Resource = "arn:aws:ecr:us-east-1:086241318869:repository/snapdf-app"
       },
       {
         Effect   = "Allow"
@@ -77,10 +77,10 @@ resource "aws_iam_role_policy_attachment" "github_actions_ci" {
 # ── ECR Repository ───────────────────────────────────────────────────────────
 # One registry shared by both dev and prod clusters
 # NOTE: already created manually in Phase 0 — import with:
-#   terragrunt import aws_ecr_repository.app projectview-app
+#   terragrunt import aws_ecr_repository.app snapdf-app
 
 resource "aws_ecr_repository" "app" {
-  name                 = "projectview-app"
+  name                 = "snapdf-app"
   image_tag_mutability = "MUTABLE" # allows overwriting tags e.g. :latest
 
   image_scanning_configuration {
@@ -88,7 +88,7 @@ resource "aws_ecr_repository" "app" {
   }
 
   tags = {
-    Project   = "projectview"
+    Project   = "snapdf"
     ManagedBy = "terragrunt"
   }
 }
@@ -96,16 +96,16 @@ resource "aws_ecr_repository" "app" {
 # ── API Key Secret ────────────────────────────────────────────────────────────
 # Creates the slot in Secrets Manager — value is set manually after apply:
 #   aws secretsmanager put-secret-value \
-#     --secret-id projectview/api-key \
+#     --secret-id snapdf/api-key \
 #     --secret-string "your-actual-api-key-here"
 
 resource "aws_secretsmanager_secret" "api_key" {
-  name                    = "projectview/api-key"
+  name                    = "snapdf/api-key"
   description             = "API key for signed users — checked by the Flask web server via X-API-Key header"
   recovery_window_in_days = 0 # allows immediate deletion with terraform destroy (default is 30 day wait)
 
   tags = {
-    Project   = "projectview"
+    Project   = "snapdf"
     ManagedBy = "terragrunt"
   }
 }

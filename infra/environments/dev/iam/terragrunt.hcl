@@ -24,8 +24,8 @@ dependency "sqs" {
   config_path = "../sqs"
 
   mock_outputs = {
-    signed_queue_arn = "arn:aws:sqs:us-east-1:123456789012:projectview-dev-signed"
-    free_queue_arn   = "arn:aws:sqs:us-east-1:123456789012:projectview-dev-free"
+    signed_queue_arn = "arn:aws:sqs:us-east-1:123456789012:snapdf-dev-signed"
+    free_queue_arn   = "arn:aws:sqs:us-east-1:123456789012:snapdf-dev-free"
   }
 
   mock_outputs_allowed_terraform_commands = ["validate", "plan"]
@@ -35,7 +35,7 @@ dependency "s3" {
   config_path = "../s3"
 
   mock_outputs = {
-    bucket_arn = "arn:aws:s3:::projectview-dev-pdfs-123456789012"
+    bucket_arn = "arn:aws:s3:::snapdf-dev-pdfs-123456789012"
   }
 
   mock_outputs_allowed_terraform_commands = ["validate", "plan"]

@@ -4,7 +4,7 @@ variable "env_name" {
 }
 
 variable "cluster_name" {
-  description = "EKS cluster name — used to name IAM roles e.g. projectview-dev-alb-controller"
+  description = "EKS cluster name — used to name IAM roles e.g. snapdf-dev-alb-controller"
   type        = string
 }
 

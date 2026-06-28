@@ -16,7 +16,7 @@ locals {
 
 # Role — trusts only the alb-controller service account in kube-system namespace
 resource "aws_iam_role" "alb_controller" {
-  name = "${var.cluster_name}-alb-controller"  # e.g. "projectview-dev-alb-controller"
+  name = "${var.cluster_name}-alb-controller"  # e.g. "snapdf-dev-alb-controller"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -156,7 +156,7 @@ resource "aws_iam_role_policy_attachment" "alb_controller" {
 
 # Role — trusts only the external-secrets service account in external-secrets namespace
 resource "aws_iam_role" "eso" {
-  name = "${var.cluster_name}-eso"  # e.g. "projectview-dev-eso"
+  name = "${var.cluster_name}-eso"  # e.g. "snapdf-dev-eso"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

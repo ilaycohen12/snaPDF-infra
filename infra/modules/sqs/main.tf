@@ -1,5 +1,5 @@
 resource "aws_sqs_queue" "signed" {
-  name                       = "${var.cluster_name}-signed" # e.g. "projectview-dev-signed"
+  name                       = "${var.cluster_name}-signed" # e.g. "snapdf-dev-signed"
   visibility_timeout_seconds = 60   # message hidden for 60s after worker picks it up — if worker crashes, message reappears for retry
   message_retention_seconds  = 3600 # delete unprocessed messages after 1 hour
 
@@ -11,7 +11,7 @@ resource "aws_sqs_queue" "signed" {
 }
 
 resource "aws_sqs_queue" "free" {
-  name                       = "${var.cluster_name}-free" # e.g. "projectview-dev-free"
+  name                       = "${var.cluster_name}-free" # e.g. "snapdf-dev-free"
   visibility_timeout_seconds = 60
   message_retention_seconds  = 3600
 

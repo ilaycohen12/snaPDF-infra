@@ -5,6 +5,6 @@
 
 locals {
   env_name           = "dev"              # environment label — used in resource names and tags
-  cluster_name       = "projectview-dev"  # EKS cluster name as it will appear in AWS
+  cluster_name       = "snapdf-dev"  # EKS cluster name as it will appear in AWS
   node_instance_type = "t3.small"         # EC2 instance type for worker nodes
 }

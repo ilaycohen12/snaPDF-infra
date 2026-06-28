@@ -1,7 +1,7 @@
 # ── Security Group ───────────────────────────────────────────────────────────
 # Controls who can connect to RDS — only EKS worker nodes on port 5432
 resource "aws_security_group" "rds" {
-  name   = "${var.cluster_name}-rds-sg"  # e.g. "projectview-dev-rds-sg"
+  name   = "${var.cluster_name}-rds-sg"  # e.g. "snapdf-dev-rds-sg"
   vpc_id = var.vpc_id                     # must belong to a specific VPC
 
   ingress {
@@ -28,13 +28,13 @@ resource "aws_security_group" "rds" {
 
 # ── RDS Instance ─────────────────────────────────────────────────────────────
 resource "aws_db_instance" "main" {
-  identifier        = "${var.cluster_name}-rds"  # name shown in AWS console e.g. "projectview-dev-rds"
+  identifier        = "${var.cluster_name}-rds"  # name shown in AWS console e.g. "snapdf-dev-rds"
   engine            = "postgres"                  # PostgreSQL engine
   engine_version    = "16"                        # latest stable PostgreSQL version
   instance_class    = "db.t3.micro"              # cheapest instance — ~$15/month, destroy when not working
   allocated_storage = 20                          # 20 GB disk — minimum allowed by AWS
 
-  db_name  = var.db_name      # database name inside PostgreSQL e.g. "projectview"
+  db_name  = var.db_name      # database name inside PostgreSQL e.g. "snapdf"
   username = var.db_username  # master username e.g. "dbadmin"
 
   manage_master_user_password = true  # AWS generates password + stores it in Secrets Manager automatically
@@ -50,7 +50,7 @@ resource "aws_db_instance" "main" {
 
   tags = {
     Environment = var.env_name
-    Project     = "projectview"
+    Project     = "snapdf"
     ManagedBy   = "terragrunt"
   }
 }

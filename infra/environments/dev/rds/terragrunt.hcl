@@ -15,7 +15,7 @@ dependency "vpc" {
 
   mock_outputs = {
     vpc_id                     = "vpc-00000000000000000"  # fake VPC ID for plan/validate
-    database_subnet_group_name = "projectview-dev"        # fake subnet group name for plan/validate
+    database_subnet_group_name = "snapdf-dev"        # fake subnet group name for plan/validate
   }
 
   mock_outputs_allowed_terraform_commands = ["validate", "plan"]
@@ -33,7 +33,7 @@ dependency "eks" {
 
 inputs = {
   env_name                   = local.env.locals.env_name                         # "dev"
-  cluster_name               = local.env.locals.cluster_name                     # "projectview-dev"
+  cluster_name               = local.env.locals.cluster_name                     # "snapdf-dev"
   vpc_id                     = dependency.vpc.outputs.vpc_id                     # from vpc module
   database_subnet_group_name = dependency.vpc.outputs.database_subnet_group_name # from vpc module
   node_security_group_id     = dependency.eks.outputs.node_security_group_id     # from eks module

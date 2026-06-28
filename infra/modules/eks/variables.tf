@@ -4,7 +4,7 @@ variable "env_name" {
 }
 
 variable "cluster_name" {
-  description = "EKS cluster name — e.g. projectview-dev"
+  description = "EKS cluster name — e.g. snapdf-dev"
   type        = string
 }
 

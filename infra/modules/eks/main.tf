@@ -2,7 +2,7 @@ module "eks" {
   source  = "terraform-aws-modules/eks/aws"  # official community module
   version = "~> 20.0"
 
-  cluster_name    = var.cluster_name          # e.g. "projectview-dev"
+  cluster_name    = var.cluster_name          # e.g. "snapdf-dev"
   cluster_version = "1.31"                    # Kubernetes version
 
   vpc_id     = var.vpc_id                     # which VPC to put the cluster in
@@ -14,7 +14,7 @@ module "eks" {
 
   eks_managed_node_groups = {
     default = {
-      name           = "${var.cluster_name}-nodes"  # e.g. "projectview-dev-nodes"
+      name           = "${var.cluster_name}-nodes"  # e.g. "snapdf-dev-nodes"
       instance_types = [var.node_instance_type]     # ["t3.small"]
       min_size       = 1                            # never go below 1 node
       max_size       = 3                            # can scale up to 3 under load
@@ -36,7 +36,7 @@ module "eks" {
 
   tags = {
     Environment = var.env_name   # "dev" or "prod"
-    Project     = "projectview"
+    Project     = "snapdf"
     ManagedBy   = "terragrunt"
   }
 }

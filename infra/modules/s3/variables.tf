@@ -4,6 +4,6 @@ variable "env_name" {
 }
 
 variable "cluster_name" {
-  description = "Cluster name — used to name the bucket e.g. projectview-dev"
+  description = "Cluster name — used to name the bucket e.g. snapdf-dev"
   type        = string
 }

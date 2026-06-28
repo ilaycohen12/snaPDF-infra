@@ -24,7 +24,7 @@ dependency "vpc" {
 
 inputs = {
   env_name           = local.env.locals.env_name            # "prod"
-  cluster_name       = local.env.locals.cluster_name        # "projectview-prod"
+  cluster_name       = local.env.locals.cluster_name        # "snapdf-prod"
   node_instance_type = local.env.locals.node_instance_type  # "t3.small"
   vpc_id             = dependency.vpc.outputs.vpc_id        # real value from vpc state during apply
   private_subnet_ids = dependency.vpc.outputs.private_subnet_ids # real value from vpc state during apply

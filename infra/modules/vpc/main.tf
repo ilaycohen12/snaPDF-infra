@@ -2,7 +2,7 @@ module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"  # official community module
   version = "~> 5.0"                          # any 5.x version
 
-  name = "projectview-${var.env_name}"        # e.g. "projectview-dev"
+  name = "snapdf-${var.env_name}"        # e.g. "snapdf-dev"
   cidr = var.vpc_cidr                         # 10.0.0.0/16
 
   azs              = var.azs                   # ["us-east-1a", "us-east-1b"]
@@ -27,7 +27,7 @@ module "vpc" {
 
   tags = {
     Environment = var.env_name                  # "dev" or "prod"
-    Project     = "projectview"
+    Project     = "snapdf"
     ManagedBy   = "terragrunt"
   }
 }

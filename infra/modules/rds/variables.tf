@@ -4,7 +4,7 @@ variable "env_name" {
 }
 
 variable "cluster_name" {
-  description = "EKS cluster name — used to name RDS resources e.g. projectview-dev-rds"
+  description = "EKS cluster name — used to name RDS resources e.g. snapdf-dev-rds"
   type        = string
 }
 
@@ -26,7 +26,7 @@ variable "node_security_group_id" {
 variable "db_name" {
   description = "Name of the database inside PostgreSQL"
   type        = string
-  default     = "projectview"
+  default     = "snapdf"
 }
 
 variable "db_username" {

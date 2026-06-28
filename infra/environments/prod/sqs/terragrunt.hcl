@@ -12,5 +12,5 @@ terraform {
 
 inputs = {
   env_name     = local.env.locals.env_name     # "prod"
-  cluster_name = local.env.locals.cluster_name # "projectview-prod"
+  cluster_name = local.env.locals.cluster_name # "snapdf-prod"
 }

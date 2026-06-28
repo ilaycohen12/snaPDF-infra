@@ -24,7 +24,7 @@ dependency "eks" {
   config_path = "../eks"
 
   mock_outputs = {
-    cluster_name                       = "projectview-prod"
+    cluster_name                       = "snapdf-prod"
     cluster_endpoint                   = "https://mock.eks.amazonaws.com"
     cluster_certificate_authority_data = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
   }
@@ -36,9 +36,9 @@ dependency "iam" {
   config_path = "../iam"
 
   mock_outputs = {
-    alb_controller_role_arn = "arn:aws:iam::123456789012:role/projectview-prod-alb-controller"
-    eso_role_arn            = "arn:aws:iam::123456789012:role/projectview-prod-eso"
-    keda_role_arn           = "arn:aws:iam::123456789012:role/projectview-prod-keda"
+    alb_controller_role_arn = "arn:aws:iam::123456789012:role/snapdf-prod-alb-controller"
+    eso_role_arn            = "arn:aws:iam::123456789012:role/snapdf-prod-eso"
+    keda_role_arn           = "arn:aws:iam::123456789012:role/snapdf-prod-keda"
   }
 
   mock_outputs_allowed_terraform_commands = ["validate", "plan"]

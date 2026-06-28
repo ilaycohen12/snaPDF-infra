@@ -1,7 +1,7 @@
 output "ecr_repository_url" {
   description = "ECR repository URL — used by GitHub Actions to push images and by EKS to pull them"
   value       = aws_ecr_repository.app.repository_url
-  # e.g. "086241318869.dkr.ecr.us-east-1.amazonaws.com/projectview-app"
+  # e.g. "086241318869.dkr.ecr.us-east-1.amazonaws.com/snapdf-app"
 }
 
 output "api_key_secret_arn" {
