@@ -19,7 +19,7 @@ dependency "vpc" {
                           "subnet-11111111111111111"]
   }
 
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"] # use mocks only during plan/validate, never during apply
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"] # use mocks only during plan/validate, never during apply
 }
 
 inputs = {

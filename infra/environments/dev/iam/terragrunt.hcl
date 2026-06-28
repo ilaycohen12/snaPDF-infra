@@ -17,7 +17,7 @@ dependency "eks" {
     oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/XXXXXXXX"
   }
 
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
 dependency "sqs" {
@@ -28,7 +28,7 @@ dependency "sqs" {
     free_queue_arn   = "arn:aws:sqs:us-east-1:123456789012:snapdf-dev-free"
   }
 
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
 dependency "s3" {
@@ -38,7 +38,7 @@ dependency "s3" {
     bucket_arn = "arn:aws:s3:::snapdf-dev-pdfs-123456789012"
   }
 
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
 inputs = {

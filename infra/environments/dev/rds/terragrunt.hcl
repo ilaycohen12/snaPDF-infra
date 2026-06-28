@@ -18,7 +18,7 @@ dependency "vpc" {
     database_subnet_group_name = "snapdf-dev"        # fake subnet group name for plan/validate
   }
 
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
 dependency "eks" {
@@ -28,7 +28,7 @@ dependency "eks" {
     node_security_group_id = "sg-00000000000000000" # fake security group ID for plan/validate
   }
 
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
 inputs = {

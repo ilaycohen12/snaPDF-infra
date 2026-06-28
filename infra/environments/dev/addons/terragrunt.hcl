@@ -17,7 +17,7 @@ dependency "vpc" {
     vpc_id = "vpc-00000000000000000"
   }
 
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
 dependency "eks" {
@@ -29,7 +29,7 @@ dependency "eks" {
     cluster_certificate_authority_data = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
   }
 
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
 dependency "iam" {
@@ -41,7 +41,7 @@ dependency "iam" {
     keda_role_arn           = "arn:aws:iam::123456789012:role/snapdf-dev-keda"
   }
 
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
 inputs = {
