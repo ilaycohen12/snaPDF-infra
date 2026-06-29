@@ -86,6 +86,7 @@ resource "aws_iam_role_policy_attachment" "github_actions_ci" {
 resource "aws_ecr_repository" "api" {
   name                 = "snapdf-api"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
   image_scanning_configuration { scan_on_push = true }
   tags = { Project = "snapdf", ManagedBy = "terragrunt" }
 }
@@ -93,6 +94,7 @@ resource "aws_ecr_repository" "api" {
 resource "aws_ecr_repository" "worker" {
   name                 = "snapdf-worker"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
   image_scanning_configuration { scan_on_push = true }
   tags = { Project = "snapdf", ManagedBy = "terragrunt" }
 }
@@ -100,6 +102,7 @@ resource "aws_ecr_repository" "worker" {
 resource "aws_ecr_repository" "auth" {
   name                 = "snapdf-auth"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
   image_scanning_configuration { scan_on_push = true }
   tags = { Project = "snapdf", ManagedBy = "terragrunt" }
 }
