@@ -85,8 +85,19 @@ if ($VPC_ID -eq "None" -or [string]::IsNullOrEmpty($VPC_ID)) {
         }
     }
 
-    # ── Step 5: Delete all subnets manually ─────────────────────────────────
-    Write-Host "`n=== Step 5: Delete subnets ===" -ForegroundColor Cyan
+    # ── Step 5a: Delete leftover security groups ─────────────────────────────
+    Write-Host "`n=== Step 5a: Delete leftover security groups ===" -ForegroundColor Cyan
+    $sgs = aws ec2 describe-security-groups `
+        --filters "Name=vpc-id,Values=$VPC_ID" `
+        --query "SecurityGroups[?GroupName!='default'].GroupId" `
+        --output json | ConvertFrom-Json
+    foreach ($sg in $sgs) {
+        Write-Host "    Deleting security group $sg"
+        aws ec2 delete-security-group --group-id $sg 2>$null
+    }
+
+    # ── Step 5b: Delete all subnets manually ─────────────────────────────────
+    Write-Host "`n=== Step 5b: Delete subnets ===" -ForegroundColor Cyan
     $subnets = aws ec2 describe-subnets `
         --filters "Name=vpc-id,Values=$VPC_ID" `
         --query "Subnets[*].SubnetId" `
