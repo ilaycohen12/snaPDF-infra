@@ -58,7 +58,11 @@ resource "aws_iam_policy" "github_actions_ci" {
           "ecr:BatchGetImage",
           "ecr:GetDownloadUrlForLayer"
         ]
-        Resource = "arn:aws:ecr:us-east-1:086241318869:repository/snapdf-app"
+        Resource = [
+          "arn:aws:ecr:us-east-1:086241318869:repository/snapdf-api",
+          "arn:aws:ecr:us-east-1:086241318869:repository/snapdf-worker",
+          "arn:aws:ecr:us-east-1:086241318869:repository/snapdf-auth"
+        ]
       },
       {
         Effect   = "Allow"
@@ -79,18 +83,25 @@ resource "aws_iam_role_policy_attachment" "github_actions_ci" {
 # NOTE: already created manually in Phase 0 — import with:
 #   terragrunt import aws_ecr_repository.app snapdf-app
 
-resource "aws_ecr_repository" "app" {
-  name                 = "snapdf-app"
-  image_tag_mutability = "MUTABLE" # allows overwriting tags e.g. :latest
+resource "aws_ecr_repository" "api" {
+  name                 = "snapdf-api"
+  image_tag_mutability = "MUTABLE"
+  image_scanning_configuration { scan_on_push = true }
+  tags = { Project = "snapdf", ManagedBy = "terragrunt" }
+}
 
-  image_scanning_configuration {
-    scan_on_push = true # scans every pushed image for known CVEs automatically
-  }
+resource "aws_ecr_repository" "worker" {
+  name                 = "snapdf-worker"
+  image_tag_mutability = "MUTABLE"
+  image_scanning_configuration { scan_on_push = true }
+  tags = { Project = "snapdf", ManagedBy = "terragrunt" }
+}
 
-  tags = {
-    Project   = "snapdf"
-    ManagedBy = "terragrunt"
-  }
+resource "aws_ecr_repository" "auth" {
+  name                 = "snapdf-auth"
+  image_tag_mutability = "MUTABLE"
+  image_scanning_configuration { scan_on_push = true }
+  tags = { Project = "snapdf", ManagedBy = "terragrunt" }
 }
 
 # ── API Key Secret ────────────────────────────────────────────────────────────

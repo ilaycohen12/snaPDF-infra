@@ -1,7 +1,16 @@
-output "ecr_repository_url" {
-  description = "ECR repository URL — used by GitHub Actions to push images and by EKS to pull them"
-  value       = aws_ecr_repository.app.repository_url
-  # e.g. "086241318869.dkr.ecr.us-east-1.amazonaws.com/snapdf-app"
+output "ecr_api_url" {
+  description = "ECR URL for the api service image"
+  value       = aws_ecr_repository.api.repository_url
+}
+
+output "ecr_worker_url" {
+  description = "ECR URL for the worker service image"
+  value       = aws_ecr_repository.worker.repository_url
+}
+
+output "ecr_auth_url" {
+  description = "ECR URL for the auth service image"
+  value       = aws_ecr_repository.auth.repository_url
 }
 
 output "api_key_secret_arn" {
