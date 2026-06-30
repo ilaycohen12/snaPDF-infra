@@ -75,6 +75,22 @@ resource "helm_release" "argocd" {
   }
 }
 
+# ── Nginx Ingress Controller ──────────────────────────────────────────────────
+resource "helm_release" "nginx" {
+  name             = "ingress-nginx"
+  repository       = "https://kubernetes.github.io/ingress-nginx"
+  chart            = "ingress-nginx"
+  namespace        = "ingress-nginx"
+  version          = "4.10.1"
+  create_namespace = true
+  wait             = false
+
+  set {
+    name  = "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-scheme"
+    value = "internet-facing"
+  }
+}
+
 # ── KEDA ──────────────────────────────────────────────────────────────────────
 resource "helm_release" "keda" {
   name             = "keda"
