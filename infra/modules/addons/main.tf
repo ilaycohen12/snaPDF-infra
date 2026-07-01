@@ -118,7 +118,12 @@ resource "helm_release" "keda" {
   depends_on       = [helm_release.alb_controller]
 
   set {
-    name  = "serviceAccount.operator.annotations.eks\\.amazonaws\\.com/role-arn"
+    name  = "podIdentity.aws.irsa.enabled"
+    value = "true"
+  }
+
+  set {
+    name  = "podIdentity.aws.irsa.roleArn"
     value = var.keda_role_arn
   }
 }

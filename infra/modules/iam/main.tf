@@ -255,8 +255,20 @@ resource "aws_iam_role" "worker" {
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          "${local.oidc_url}:sub" = "system:serviceaccount:dev:pdf-worker-sa" # locked to worker service account in dev namespace
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
+        }
+        # Wildcard covers both worker deployments (free-worker-*, signed-worker-*) in dev/staging.
+        # api/auth service accounts are listed explicitly since they don't match the *-worker-* pattern
+        # but share this same role (Bug 19 fix).
+        StringLike = {
+          "${local.oidc_url}:sub" = [
+            "system:serviceaccount:dev:*-worker-*",
+            "system:serviceaccount:staging:*-worker-*",
+            "system:serviceaccount:dev:auth-dev-sa",
+            "system:serviceaccount:staging:auth-staging-sa",
+            "system:serviceaccount:dev:api-dev-sa",
+            "system:serviceaccount:staging:api-staging-sa"
+          ]
         }
       }
     }]
