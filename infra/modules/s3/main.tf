@@ -1,7 +1,9 @@
 data "aws_caller_identity" "current" {}
 
 resource "aws_s3_bucket" "pdfs" {
-  bucket        = "${var.cluster_name}-pdfs-${data.aws_caller_identity.current.account_id}"
+  for_each = toset(var.app_namespaces)
+
+  bucket        = "snapdf-${each.value}-pdfs-${data.aws_caller_identity.current.account_id}" # e.g. "snapdf-dev-pdfs-...", "snapdf-staging-pdfs-..."
   force_destroy = true # delete all objects automatically on terraform destroy
 
   tags = {
@@ -11,7 +13,9 @@ resource "aws_s3_bucket" "pdfs" {
 }
 
 resource "aws_s3_bucket_public_access_block" "pdfs" {
-  bucket = aws_s3_bucket.pdfs.id
+  for_each = aws_s3_bucket.pdfs
+
+  bucket = each.value.id
 
   block_public_acls       = true # nobody can make objects public via ACL
   block_public_policy     = true # nobody can attach a public bucket policy

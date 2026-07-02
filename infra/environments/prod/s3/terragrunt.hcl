@@ -11,6 +11,8 @@ terraform {
 }
 
 inputs = {
-  env_name     = local.env.locals.env_name     # "prod"
-  cluster_name = local.env.locals.cluster_name # "snapdf-prod"
+  env_name = local.env.locals.env_name # "prod"
+  # "prod" here, not "production" — matches the existing bucket name
+  # (snapdf-prod-pdfs-...) already live in AWS. Same reasoning as sqs/terragrunt.hcl.
+  app_namespaces = ["prod"]
 }

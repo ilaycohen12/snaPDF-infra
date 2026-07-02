@@ -11,6 +11,10 @@ terraform {
 }
 
 inputs = {
-  env_name     = local.env.locals.env_name     # "prod"
-  cluster_name = local.env.locals.cluster_name # "snapdf-prod"
+  env_name = local.env.locals.env_name # "prod"
+  # "prod" here, not "production" — matches the existing queue names
+  # (snapdf-prod-signed/free) already live in AWS. This is just a naming string for
+  # the AWS resource, unrelated to the k8s namespace name (which the iam module's
+  # app_namespaces below is what actually needs to match exactly).
+  app_namespaces = ["prod"]
 }

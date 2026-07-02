@@ -24,8 +24,8 @@ dependency "sqs" {
   config_path = "../sqs"
 
   mock_outputs = {
-    signed_queue_arn = "arn:aws:sqs:us-east-1:123456789012:snapdf-dev-signed"
-    free_queue_arn   = "arn:aws:sqs:us-east-1:123456789012:snapdf-dev-free"
+    signed_queue_arns = { dev = "arn:aws:sqs:us-east-1:123456789012:snapdf-dev-signed", staging = "arn:aws:sqs:us-east-1:123456789012:snapdf-staging-signed" }
+    free_queue_arns   = { dev = "arn:aws:sqs:us-east-1:123456789012:snapdf-dev-free", staging = "arn:aws:sqs:us-east-1:123456789012:snapdf-staging-free" }
   }
 
   mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
@@ -35,7 +35,7 @@ dependency "s3" {
   config_path = "../s3"
 
   mock_outputs = {
-    bucket_arn = "arn:aws:s3:::snapdf-dev-pdfs-123456789012"
+    bucket_arns = { dev = "arn:aws:s3:::snapdf-dev-pdfs-123456789012", staging = "arn:aws:s3:::snapdf-staging-pdfs-123456789012" }
   }
 
   mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
@@ -45,8 +45,8 @@ inputs = {
   env_name          = local.env.locals.env_name
   cluster_name      = local.env.locals.cluster_name
   oidc_provider_arn = dependency.eks.outputs.oidc_provider_arn
-  signed_queue_arn  = dependency.sqs.outputs.signed_queue_arn
-  free_queue_arn    = dependency.sqs.outputs.free_queue_arn
-  bucket_arn        = dependency.s3.outputs.bucket_arn
+  signed_queue_arns = values(dependency.sqs.outputs.signed_queue_arns)
+  free_queue_arns   = values(dependency.sqs.outputs.free_queue_arns)
+  bucket_arns       = values(dependency.s3.outputs.bucket_arns)
   app_namespaces    = ["dev", "staging"]
 }

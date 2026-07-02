@@ -231,7 +231,7 @@ resource "aws_iam_policy" "keda" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["sqs:GetQueueAttributes"] # read queue depth — the only thing KEDA needs
-      Resource = [var.signed_queue_arn]      # only the signed queue — KEDA only watches this one
+      Resource = var.signed_queue_arns      # every signed queue this cluster's namespaces use
     }]
   })
 }
@@ -293,7 +293,7 @@ resource "aws_iam_policy" "worker" {
           "sqs:DeleteMessage",     # delete it after processing (worker)
           "sqs:GetQueueAttributes" # read queue metadata
         ]
-        Resource = [var.signed_queue_arn, var.free_queue_arn] # both queues
+        Resource = concat(var.signed_queue_arns, var.free_queue_arns) # every signed+free queue this cluster's namespaces use
       },
       {
         Effect = "Allow"
@@ -301,7 +301,7 @@ resource "aws_iam_policy" "worker" {
           "s3:PutObject", # upload the generated PDF
           "s3:GetObject"  # needed to generate presigned download URLs
         ]
-        Resource = "${var.bucket_arn}/*" # all objects inside the PDF bucket
+        Resource = [for arn in var.bucket_arns : "${arn}/*"] # all objects inside every PDF bucket this cluster's namespaces use
       }
     ]
   })

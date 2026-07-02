@@ -3,7 +3,7 @@ variable "env_name" {
   type        = string
 }
 
-variable "cluster_name" {
-  description = "Cluster name — used to name the queues e.g. snapdf-dev-signed"
-  type        = string
+variable "app_namespaces" {
+  description = "Application namespaces in this cluster that each need their own signed+free queue pair, e.g. [\"dev\", \"staging\"] or [\"production\"]"
+  type        = list(string)
 }

@@ -13,19 +13,19 @@ variable "oidc_provider_arn" {
   type        = string
 }
 
-variable "signed_queue_arn" {
-  description = "ARN of the signed SQS queue — used in KEDA and worker IAM policies"
-  type        = string
+variable "signed_queue_arns" {
+  description = "ARNs of every signed SQS queue this cluster's namespaces use — used in KEDA and worker IAM policies"
+  type        = list(string)
 }
 
-variable "free_queue_arn" {
-  description = "ARN of the free SQS queue — used in worker IAM policy"
-  type        = string
+variable "free_queue_arns" {
+  description = "ARNs of every free SQS queue this cluster's namespaces use — used in worker IAM policy"
+  type        = list(string)
 }
 
-variable "bucket_arn" {
-  description = "ARN of the PDF S3 bucket — used in worker IAM policy"
-  type        = string
+variable "bucket_arns" {
+  description = "ARNs of every PDF S3 bucket this cluster's namespaces use — used in worker IAM policy"
+  type        = list(string)
 }
 
 variable "app_namespaces" {
