@@ -12,6 +12,24 @@ module "eks" {
   enable_irsa                              = true  # enables OIDC — required for ESO and ALB controller
   enable_cluster_creator_admin_permissions = true  # gives you kubectl admin access after apply
 
+  # VPC CNI explicitly managed here (was previously left as AWS's untracked default).
+  # Prefix delegation raises pod density per node from ~17 (one IP per pod, limited by
+  # each node's ENIs) to well over 100, by handing out /28 blocks of 16 IPs at a time
+  # instead of one IP at a time. kubelet's own max-pods is capped separately below at 35
+  # — a deliberate ceiling for near-term headroom (Karpenter, Prometheus/Grafana), not
+  # the raw maximum the CNI could technically support.
+  cluster_addons = {
+    vpc-cni = {
+      before_compute = true # install before nodes launch, so they boot with the right CNI config
+      configuration_values = jsonencode({
+        env = {
+          ENABLE_PREFIX_DELEGATION = "true"
+          WARM_PREFIX_TARGET       = "1"
+        }
+      })
+    }
+  }
+
   eks_managed_node_groups = {
     default = {
       name           = "${var.cluster_name}-nodes"  # e.g. "snapdf-dev-nodes"
@@ -19,6 +37,32 @@ module "eks" {
       min_size       = 1                            # never go below 1 node
       max_size       = 3                            # can scale up to 3 under load
       desired_size   = 2                            # 2 nodes is enough for t3.medium
+
+      # Explicit, not left to default — the module only generates nodeadm-format user
+      # data (required for cloudinit_pre_nodeadm below to actually take effect) when
+      # ami_type is explicitly AL2023_*. Left as null/default, it silently falls back
+      # to the legacy bootstrap.sh format and ignores cloudinit_pre_nodeadm entirely.
+      ami_type = "AL2023_x86_64_STANDARD"
+
+      # Amazon Linux 2023 nodes use nodeadm, configured via a NodeConfig document
+      # injected before nodeadm runs. This overrides kubelet's default max-pods
+      # (normally auto-calculated from instance type + CNI) with our own ceiling.
+      cloudinit_pre_nodeadm = [
+        {
+          content_type = "application/node.eks.aws"
+          content = yamlencode({
+            apiVersion = "node.eks.aws/v1alpha1"
+            kind       = "NodeConfig"
+            spec = {
+              kubelet = {
+                config = {
+                  maxPods = 35
+                }
+              }
+            }
+          })
+        }
+      ]
     }
   }
 
