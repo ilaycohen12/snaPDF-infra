@@ -122,7 +122,10 @@ if ($VPC_ID -eq "None" -or [string]::IsNullOrEmpty($VPC_ID)) {
 # ── Step 6: Destroy ──────────────────────────────────────────────────────────
 Write-Host "`n=== Step 6: Destroy all infrastructure ($Environment) ===" -ForegroundColor Cyan
 Write-Host "    Using --lock=false to prevent stuck locks on DNS failure"
+Write-Host "    Using -refresh=false so addons' Route53 data sources (reading the"
+Write-Host "    ArgoCD/Nginx LB status) don't hard-fail after Step 1 already deleted"
+Write-Host "    those Services/Ingresses - found live: this blocked the entire destroy."
 Set-Location "infra/environments/$Environment"
-terragrunt run-all destroy --lock=false --terragrunt-non-interactive
+terragrunt run-all destroy --lock=false --terragrunt-non-interactive -refresh=false
 
 Write-Host "`n=== Done ===" -ForegroundColor Green
