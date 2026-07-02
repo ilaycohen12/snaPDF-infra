@@ -56,9 +56,11 @@ dependency "iam" {
   config_path = "../iam"
 
   mock_outputs = {
-    alb_controller_role_arn = "arn:aws:iam::123456789012:role/snapdf-prod-alb-controller"
-    eso_role_arn            = "arn:aws:iam::123456789012:role/snapdf-prod-eso"
-    keda_role_arn           = "arn:aws:iam::123456789012:role/snapdf-prod-keda"
+    alb_controller_role_arn       = "arn:aws:iam::123456789012:role/snapdf-prod-alb-controller"
+    eso_role_arn                  = "arn:aws:iam::123456789012:role/snapdf-prod-eso"
+    keda_role_arn                 = "arn:aws:iam::123456789012:role/snapdf-prod-keda"
+    karpenter_controller_role_arn = "arn:aws:iam::123456789012:role/snapdf-prod-karpenter-controller"
+    karpenter_node_role_arn       = "arn:aws:iam::123456789012:role/snapdf-prod-karpenter-node"
   }
 
   mock_outputs_allowed_terraform_commands = ["validate", "plan"]
@@ -87,4 +89,6 @@ inputs = {
   domain_name                        = "snapdf.bond"
   app_hostnames                      = ["prod"]
   argocd_hostname                    = "argocd-prod"
+  karpenter_controller_role_arn      = dependency.iam.outputs.karpenter_controller_role_arn
+  karpenter_node_role_arn            = dependency.iam.outputs.karpenter_node_role_arn
 }
