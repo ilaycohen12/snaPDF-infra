@@ -98,6 +98,9 @@ resource "helm_release" "argocd" {
 }
 
 # ── Nginx Ingress Controller ──────────────────────────────────────────────────
+# controller.service.type is ClusterIP (not the chart's default LoadBalancer) —
+# Nginx no longer creates its own AWS load balancer. Real internet traffic now
+# arrives via the ALB Ingress below instead (infra #18).
 resource "helm_release" "nginx" {
   name             = "ingress-nginx"
   repository       = "https://kubernetes.github.io/ingress-nginx"
@@ -109,8 +112,8 @@ resource "helm_release" "nginx" {
   depends_on       = [helm_release.alb_controller]
 
   set {
-    name  = "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-scheme"
-    value = "internet-facing"
+    name  = "controller.service.type"
+    value = "ClusterIP"
   }
 
   # Disabled: the admission-patch Job can't schedule on small clusters (pod limit)
@@ -120,15 +123,16 @@ resource "helm_release" "nginx" {
   }
 }
 
-# ── DNS: point real hostnames at the Nginx and ArgoCD load balancers ──────────
-# Reads the actual LB hostname Kubernetes already assigned to each Service,
-# rather than hardcoding or guessing the AWS-generated name.
-data "kubernetes_service" "nginx" {
+# ── DNS: point real hostnames at the ALB (in front of Nginx) and ArgoCD's LB ──
+# Reads the actual LB hostname Kubernetes/the ALB Controller already assigned,
+# rather than hardcoding or guessing the AWS-generated name. The app hostnames
+# read from the ALB Ingress's status (not Nginx's Service — it's ClusterIP now,
+# it has no load balancer of its own to read a hostname from).
+data "kubernetes_ingress_v1" "nginx_alb" {
   metadata {
-    name      = "ingress-nginx-controller"
+    name      = "nginx-alb"
     namespace = "ingress-nginx"
   }
-  depends_on = [helm_release.nginx]
 }
 
 data "kubernetes_service" "argocd" {
@@ -146,7 +150,7 @@ resource "aws_route53_record" "app" {
   name    = "${each.value}.${var.domain_name}"
   type    = "CNAME"
   ttl     = 300
-  records = [data.kubernetes_service.nginx.status[0].load_balancer[0].ingress[0].hostname]
+  records = [data.kubernetes_ingress_v1.nginx_alb.status[0].load_balancer[0].ingress[0].hostname]
 }
 
 resource "aws_route53_record" "argocd" {
