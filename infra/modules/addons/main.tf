@@ -212,3 +212,17 @@ resource "helm_release" "karpenter" {
     value = var.karpenter_controller_role_arn
   }
 }
+
+# EKS requires an IAM role to be explicitly authorized before an EC2 instance
+# using it can register as a node — the managed node group's role gets this
+# automatically, but Karpenter's separately-created node role does not. Without
+# this, Karpenter-provisioned instances boot fine at the EC2/OS level but never
+# actually join the cluster (found live: NodeClaim stuck on "Node not registered
+# with cluster" indefinitely). Lives here, not in the eks or iam module, because
+# eks can't depend on iam's node role output without creating a circular
+# dependency (iam already depends on eks for the OIDC provider).
+resource "aws_eks_access_entry" "karpenter_node" {
+  cluster_name  = var.cluster_name
+  principal_arn = var.karpenter_node_role_arn
+  type          = "EC2_LINUX"
+}

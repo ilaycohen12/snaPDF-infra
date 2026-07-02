@@ -60,6 +60,7 @@ dependency "iam" {
     eso_role_arn                  = "arn:aws:iam::123456789012:role/snapdf-dev-eso"
     keda_role_arn                 = "arn:aws:iam::123456789012:role/snapdf-dev-keda"
     karpenter_controller_role_arn = "arn:aws:iam::123456789012:role/snapdf-dev-karpenter-controller"
+    karpenter_node_role_arn       = "arn:aws:iam::123456789012:role/snapdf-dev-karpenter-node"
   }
 
   mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
@@ -89,4 +90,5 @@ inputs = {
   app_hostnames                      = ["dev", "staging"]
   argocd_hostname                    = "argocd-dev"
   karpenter_controller_role_arn      = dependency.iam.outputs.karpenter_controller_role_arn
+  karpenter_node_role_arn            = dependency.iam.outputs.karpenter_node_role_arn
 }

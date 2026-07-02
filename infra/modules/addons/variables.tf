@@ -62,3 +62,8 @@ variable "karpenter_controller_role_arn" {
   description = "IAM role ARN for the Karpenter controller — annotated onto its service account via Helm values"
   type        = string
 }
+
+variable "karpenter_node_role_arn" {
+  description = "IAM role ARN for Karpenter-provisioned nodes — granted an EKS access entry here so those nodes can actually authenticate and register with the cluster"
+  type        = string
+}

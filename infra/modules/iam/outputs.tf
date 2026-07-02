@@ -27,3 +27,8 @@ output "karpenter_node_instance_profile_name" {
   description = "Instance profile name for Karpenter-provisioned nodes — referenced by the EC2NodeClass"
   value       = aws_iam_instance_profile.karpenter_node.name
 }
+
+output "karpenter_node_role_arn" {
+  description = "IAM role ARN for Karpenter-provisioned nodes — needs an EKS access entry (created in the addons module, not here, to avoid a circular dependency between iam and eks) before nodes using it can actually register with the cluster"
+  value       = aws_iam_role.karpenter_node.arn
+}
