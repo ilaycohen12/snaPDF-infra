@@ -84,3 +84,15 @@ module "eks" {
     ManagedBy   = "terragrunt"
   }
 }
+
+# Karpenter discovers which subnets it's allowed to launch nodes into via this
+# tag (referenced in the EC2NodeClass's subnetSelectorTerms) — existing tags
+# (Environment, Project) aren't precise enough on their own since they also
+# match the public and database subnets, not just the private ones nodes go in.
+resource "aws_ec2_tag" "karpenter_subnet_discovery" {
+  for_each = toset(var.private_subnet_ids)
+
+  resource_id = each.value
+  key         = "karpenter.sh/discovery"
+  value       = var.cluster_name
+}

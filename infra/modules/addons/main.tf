@@ -182,3 +182,33 @@ resource "helm_release" "keda" {
     value = var.keda_role_arn
   }
 }
+
+# ── Karpenter ─────────────────────────────────────────────────────────────────
+# Node autoscaling — installed alongside the existing managed node group for now
+# (Phase 6, step 2 of 5). The managed node group isn't shrunk until Karpenter is
+# verified working end-to-end.
+resource "helm_release" "karpenter" {
+  name             = "karpenter"
+  repository       = "oci://public.ecr.aws/karpenter"
+  chart            = "karpenter"
+  namespace        = "kube-system"
+  version          = "1.1.1"
+  wait             = true # must be genuinely ready before we trust it to manage capacity
+  timeout          = 300
+  depends_on       = [helm_release.alb_controller]
+
+  set {
+    name  = "settings.clusterName"
+    value = var.cluster_name
+  }
+
+  set {
+    name  = "settings.clusterEndpoint"
+    value = var.cluster_endpoint
+  }
+
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = var.karpenter_controller_role_arn
+  }
+}

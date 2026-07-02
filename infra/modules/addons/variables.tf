@@ -57,3 +57,8 @@ variable "argocd_hostname" {
   description = "Subdomain label for this environment's ArgoCD UI, e.g. \"argocd-dev\" or \"argocd-prod\""
   type        = string
 }
+
+variable "karpenter_controller_role_arn" {
+  description = "IAM role ARN for the Karpenter controller — annotated onto its service account via Helm values"
+  type        = string
+}
