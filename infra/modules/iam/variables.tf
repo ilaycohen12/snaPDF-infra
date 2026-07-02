@@ -27,3 +27,8 @@ variable "bucket_arn" {
   description = "ARN of the PDF S3 bucket — used in worker IAM policy"
   type        = string
 }
+
+variable "app_namespaces" {
+  description = "Application namespaces in this cluster that need the worker IAM role — dev cluster: [\"dev\", \"staging\"], prod cluster: [\"production\"]"
+  type        = list(string)
+}

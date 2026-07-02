@@ -48,4 +48,5 @@ inputs = {
   signed_queue_arn  = dependency.sqs.outputs.signed_queue_arn
   free_queue_arn    = dependency.sqs.outputs.free_queue_arn
   bucket_arn        = dependency.s3.outputs.bucket_arn
+  app_namespaces    = ["production"]
 }

@@ -257,18 +257,20 @@ resource "aws_iam_role" "worker" {
         StringEquals = {
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
         }
-        # Wildcard covers both worker deployments (free-worker-*, signed-worker-*) in dev/staging.
-        # api/auth service accounts are listed explicitly since they don't match the *-worker-* pattern
-        # but share this same role (Bug 19 fix).
+        # Wildcard covers both worker deployments (free-worker-*, signed-worker-*) in every
+        # namespace this cluster hosts. api/auth service accounts are listed explicitly since
+        # they don't match the *-worker-* pattern but share this same role (Bug 19 fix).
+        # Generated per-namespace via var.app_namespaces so this works identically for the dev
+        # cluster (dev + staging) and the prod cluster (production) instead of hardcoding
+        # dev/staging regardless of which cluster applies this module (Bug 30 fix).
         StringLike = {
-          "${local.oidc_url}:sub" = [
-            "system:serviceaccount:dev:*-worker-*",
-            "system:serviceaccount:staging:*-worker-*",
-            "system:serviceaccount:dev:auth-dev-sa",
-            "system:serviceaccount:staging:auth-staging-sa",
-            "system:serviceaccount:dev:api-dev-sa",
-            "system:serviceaccount:staging:api-staging-sa"
-          ]
+          "${local.oidc_url}:sub" = flatten([
+            for ns in var.app_namespaces : [
+              "system:serviceaccount:${ns}:*-worker-*",
+              "system:serviceaccount:${ns}:auth-${ns}-sa",
+              "system:serviceaccount:${ns}:api-${ns}-sa"
+            ]
+          ])
         }
       }
     }]
