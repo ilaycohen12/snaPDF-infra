@@ -10,7 +10,7 @@ param(
 
 $REGION = "us-east-1"
 $CLUSTER = "snapdf-$Environment"
-$VPC_NAME = "snapdf-$Environment-vpc"
+$VPC_NAME = "snapdf-$Environment"
 
 # ── Step 1: kubectl cleanup ──────────────────────────────────────────────────
 if (-not $SkipK8s) {
