@@ -64,6 +64,16 @@ dependency "iam" {
   mock_outputs_allowed_terraform_commands = ["validate", "plan"]
 }
 
+dependency "global" {
+  config_path = "../../../global"
+
+  mock_outputs = {
+    route53_zone_id = "Z0000000000000000000"
+  }
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+}
+
 inputs = {
   env_name                           = local.env.locals.env_name
   cluster_name                       = dependency.eks.outputs.cluster_name
@@ -73,4 +83,8 @@ inputs = {
   alb_controller_role_arn            = dependency.iam.outputs.alb_controller_role_arn
   eso_role_arn                       = dependency.iam.outputs.eso_role_arn
   keda_role_arn                      = dependency.iam.outputs.keda_role_arn
+  route53_zone_id                    = dependency.global.outputs.route53_zone_id
+  domain_name                        = "snapdf.bond"
+  app_hostnames                      = ["prod"]
+  argocd_hostname                    = "argocd-prod"
 }

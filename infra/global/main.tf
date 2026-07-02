@@ -123,3 +123,17 @@ resource "aws_secretsmanager_secret" "api_key" {
     ManagedBy = "terragrunt"
   }
 }
+
+# ── Route53 Hosted Zone ───────────────────────────────────────────────────────
+# One DNS zone shared by dev, staging, and prod hostnames (dev./staging./prod.snapdf.bond).
+# After apply, the zone's name_servers output must be set as snapdf.bond's nameservers
+# in GoDaddy (or wherever the domain is registered) to actually delegate DNS to Route53.
+
+resource "aws_route53_zone" "main" {
+  name = "snapdf.bond"
+
+  tags = {
+    Project   = "snapdf"
+    ManagedBy = "terragrunt"
+  }
+}

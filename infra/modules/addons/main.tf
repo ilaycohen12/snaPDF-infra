@@ -13,6 +13,20 @@ provider "helm" {
   }
 }
 
+# ── Kubernetes Provider ───────────────────────────────────────────────────────
+# Same auth as the helm provider above — needed to read the Nginx/ArgoCD Service
+# objects directly, so we can find the AWS load balancer hostname Kubernetes
+# already created for them, without hardcoding or guessing it.
+provider "kubernetes" {
+  host                   = var.cluster_endpoint
+  cluster_ca_certificate = base64decode(var.cluster_certificate_authority_data)
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", var.cluster_name]
+  }
+}
+
 # ── ALB Ingress Controller ────────────────────────────────────────────────────
 resource "helm_release" "alb_controller" {
   name       = "aws-load-balancer-controller"
@@ -104,6 +118,43 @@ resource "helm_release" "nginx" {
     name  = "controller.admissionWebhooks.enabled"
     value = "false"
   }
+}
+
+# ── DNS: point real hostnames at the Nginx and ArgoCD load balancers ──────────
+# Reads the actual LB hostname Kubernetes already assigned to each Service,
+# rather than hardcoding or guessing the AWS-generated name.
+data "kubernetes_service" "nginx" {
+  metadata {
+    name      = "ingress-nginx-controller"
+    namespace = "ingress-nginx"
+  }
+  depends_on = [helm_release.nginx]
+}
+
+data "kubernetes_service" "argocd" {
+  metadata {
+    name      = "argocd-server"
+    namespace = "argocd"
+  }
+  depends_on = [helm_release.argocd]
+}
+
+resource "aws_route53_record" "app" {
+  for_each = toset(var.app_hostnames)
+
+  zone_id = var.route53_zone_id
+  name    = "${each.value}.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 300
+  records = [data.kubernetes_service.nginx.status[0].load_balancer[0].ingress[0].hostname]
+}
+
+resource "aws_route53_record" "argocd" {
+  zone_id = var.route53_zone_id
+  name    = "${var.argocd_hostname}.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 300
+  records = [data.kubernetes_service.argocd.status[0].load_balancer[0].ingress[0].hostname]
 }
 
 # ── KEDA ──────────────────────────────────────────────────────────────────────

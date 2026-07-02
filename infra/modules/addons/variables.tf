@@ -37,3 +37,23 @@ variable "keda_role_arn" {
   description = "IAM role ARN for KEDA — annotated onto its service account via Helm values"
   type        = string
 }
+
+variable "route53_zone_id" {
+  description = "Hosted zone ID for snapdf.bond, from the global module — used to create this environment's DNS records"
+  type        = string
+}
+
+variable "domain_name" {
+  description = "Root domain — snapdf.bond"
+  type        = string
+}
+
+variable "app_hostnames" {
+  description = "Subdomain labels that should point at this environment's Nginx ingress LB, e.g. [\"dev\",\"staging\"] or [\"prod\"]"
+  type        = list(string)
+}
+
+variable "argocd_hostname" {
+  description = "Subdomain label for this environment's ArgoCD UI, e.g. \"argocd-dev\" or \"argocd-prod\""
+  type        = string
+}
