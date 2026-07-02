@@ -17,3 +17,13 @@ output "worker_role_arn" {
   description = "IAM role ARN for PDF workers — annotated onto the worker service account"
   value       = aws_iam_role.worker.arn
 }
+
+output "karpenter_controller_role_arn" {
+  description = "IAM role ARN for the Karpenter controller — annotated onto its service account"
+  value       = aws_iam_role.karpenter_controller.arn
+}
+
+output "karpenter_node_instance_profile_name" {
+  description = "Instance profile name for Karpenter-provisioned nodes — referenced by the EC2NodeClass"
+  value       = aws_iam_instance_profile.karpenter_node.name
+}
