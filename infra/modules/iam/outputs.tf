@@ -32,3 +32,8 @@ output "karpenter_node_role_arn" {
   description = "IAM role ARN for Karpenter-provisioned nodes — needs an EKS access entry (created in the addons module, not here, to avoid a circular dependency between iam and eks) before nodes using it can actually register with the cluster"
   value       = aws_iam_role.karpenter_node.arn
 }
+
+output "ebs_csi_role_arn" {
+  description = "IAM role ARN for the EBS CSI driver — the addon itself is created in the addons module, not here, for the same circular-dependency reason as Karpenter's access entry"
+  value       = aws_iam_role.ebs_csi.arn
+}

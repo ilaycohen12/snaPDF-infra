@@ -71,6 +71,7 @@ resource "aws_iam_policy" "alb_controller" {
           "elasticloadbalancing:DescribeLoadBalancers",
           "elasticloadbalancing:DescribeLoadBalancerAttributes",
           "elasticloadbalancing:DescribeListeners",
+          "elasticloadbalancing:DescribeListenerAttributes", # newer API action — controller v2.8+ calls this on every reconcile; missing it broke IngressGroup reconciliation entirely after the 1.17.1 upgrade
           "elasticloadbalancing:DescribeListenerCertificates",
           "elasticloadbalancing:DescribeSSLPolicies",
           "elasticloadbalancing:DescribeRules",
@@ -136,6 +137,7 @@ resource "aws_iam_policy" "alb_controller" {
           "elasticloadbalancing:DeregisterTargets",
           "elasticloadbalancing:SetWebAcl",
           "elasticloadbalancing:ModifyListener",
+          "elasticloadbalancing:ModifyListenerAttributes", # paired with DescribeListenerAttributes above
           "elasticloadbalancing:AddListenerCertificates",
           "elasticloadbalancing:RemoveListenerCertificates",
           "elasticloadbalancing:ModifyRule"
@@ -239,6 +241,40 @@ resource "aws_iam_policy" "keda" {
 resource "aws_iam_role_policy_attachment" "keda" {
   policy_arn = aws_iam_policy.keda.arn
   role       = aws_iam_role.keda.name
+}
+
+# ── EBS CSI Driver (Phase 5 — Prometheus needs a real PersistentVolume) ──────
+# Nothing in this project needed a PVC before Prometheus. EKS's in-cluster
+# default "gp2" StorageClass points at the old in-tree kubernetes.io/aws-ebs
+# provisioner, removed from Kubernetes years ago — PVCs against it can never
+# bind. This role backs the actual CSI driver (ebs.csi.aws.com) that makes
+# dynamic EBS provisioning work at all now.
+resource "aws_iam_role" "ebs_csi" {
+  name = "${var.cluster_name}-ebs-csi"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = var.oidc_provider_arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_url}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa" # the addon's own fixed SA name
+          "${local.oidc_url}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+
+  tags = { Environment = var.env_name, ManagedBy = "terragrunt" }
+}
+
+# AWS-authored managed policy — same "use the official one" approach as the
+# worker role's EKS-managed policies, rather than hand-writing EBS permissions.
+resource "aws_iam_role_policy_attachment" "ebs_csi" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  role       = aws_iam_role.ebs_csi.name
 }
 
 # ── PDF Worker ────────────────────────────────────────────────────────────────

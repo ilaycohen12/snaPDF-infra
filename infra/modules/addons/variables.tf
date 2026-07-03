@@ -67,3 +67,13 @@ variable "karpenter_node_role_arn" {
   description = "IAM role ARN for Karpenter-provisioned nodes — granted an EKS access entry here so those nodes can actually authenticate and register with the cluster"
   type        = string
 }
+
+variable "grafana_hostname" {
+  description = "Subdomain label for this environment's Grafana UI, e.g. \"grafana-dev\" or \"grafana-prod\""
+  type        = string
+}
+
+variable "ebs_csi_role_arn" {
+  description = "IAM role ARN for the EBS CSI driver — annotated onto its service account via the EKS addon's service_account_role_arn"
+  type        = string
+}
