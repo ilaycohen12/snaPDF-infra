@@ -137,3 +137,56 @@ resource "aws_route53_zone" "main" {
     ManagedBy = "terragrunt"
   }
 }
+
+# ── ACM Certificate for TLS (infra #19) ──────────────────────────────────────
+# One wildcard cert covers every current and future subdomain (dev./prod./
+# argocd-prod./grafana-*.snapdf.bond) — no need to request a new cert per env
+# or per addon. Must be requested in us-east-1 since it's attached to a
+# regional ALB here, not CloudFront (which would require us-east-1 regardless
+# of where the ALB actually is — not a constraint we need to think about since
+# this whole project already lives in us-east-1).
+resource "aws_acm_certificate" "main" {
+  domain_name               = "snapdf.bond"
+  subject_alternative_names = ["*.snapdf.bond"]
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Project   = "snapdf"
+    ManagedBy = "terragrunt"
+  }
+}
+
+# ACM's proof-of-ownership check: it hands us a specific CNAME name/value pair
+# per domain and expects to find it in the zone's real DNS records. Only the
+# actual owner of the zone could create these, which is what convinces ACM to
+# issue the cert. Keyed by the record name (not domain_name) because ACM
+# often issues the *same* validation CNAME for an apex + its wildcard SAN —
+# keying by domain_name tried to create that identical record twice and the
+# second attempt collided with the first ("already exists").
+resource "aws_route53_record" "acm_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_name => {
+      name  = dvo.resource_record_name
+      type  = dvo.resource_record_type
+      value = dvo.resource_record_value
+    }...
+  }
+
+  zone_id = aws_route53_zone.main.zone_id
+  name    = each.value[0].name # [0]: the "..." grouping above turns each.value into a list of
+  type    = each.value[0].type # the (identical, in this case) duplicates sharing this key —
+  ttl     = 60                 # only the first is needed since they're the same record.
+  records = [each.value[0].value]
+}
+
+# Blocks here until ACM actually sees the validation records and flips the
+# certificate to ISSUED — so anything depending on this resource (or its
+# output) can't run before the cert is genuinely usable.
+resource "aws_acm_certificate_validation" "main" {
+  certificate_arn         = aws_acm_certificate.main.arn
+  validation_record_fqdns = [for record in aws_route53_record.acm_validation : record.fqdn]
+}

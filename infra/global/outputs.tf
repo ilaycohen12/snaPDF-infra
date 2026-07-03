@@ -27,3 +27,8 @@ output "route53_name_servers" {
   description = "Nameservers for snapdf.bond — must be set as the domain's nameservers at the registrar (GoDaddy) to delegate DNS to Route53"
   value       = aws_route53_zone.main.name_servers
 }
+
+output "acm_certificate_arn" {
+  description = "Validated wildcard cert ARN for *.snapdf.bond — paste into each Ingress's alb.ingress.kubernetes.io/certificate-arn annotation in snaPDF-gitops (not wired automatically since Ingress YAML lives outside Terraform)"
+  value       = aws_acm_certificate_validation.main.certificate_arn
+}
