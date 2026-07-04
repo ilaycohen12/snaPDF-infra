@@ -128,7 +128,7 @@ inputs = {
   keda_role_arn                      = dependency.iam.outputs.keda_role_arn
   route53_zone_id                    = dependency.global.outputs.route53_zone_id
   domain_name                        = "snapdf.bond"
-  app_hostnames                      = ["prod"]
+  app_hostnames                      = [""] # "" = bare apex (snapdf.bond), not prod.snapdf.bond
   argocd_hostname                    = "argocd-prod"
   grafana_hostname                   = "grafana-prod"
   karpenter_controller_role_arn      = dependency.iam.outputs.karpenter_controller_role_arn

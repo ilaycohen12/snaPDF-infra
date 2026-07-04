@@ -80,6 +80,32 @@ resource "helm_release" "eso" {
 }
 
 # ── ArgoCD ────────────────────────────────────────────────────────────────────
+# infra #25: GitHub -> ArgoCD webhook, so a push reaches ArgoCD instantly instead
+# of waiting out its default ~180s poll interval (gap found during the rollback
+# drill). This secret is what ArgoCD uses to validate that an incoming webhook
+# payload's signature really came from GitHub -- the argo-cd Helm chart's
+# configs.secret.githubSecret value populates the exact field ArgoCD checks.
+# The other half -- actually registering the webhook on the snaPDF-gitops repo
+# -- is done once via `gh api`, not Terraform: adding a whole GitHub provider
+# (+ its own PAT credential) for one webhook per environment isn't proportionate.
+resource "random_password" "argocd_webhook" {
+  length  = 32
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "argocd_webhook" {
+  name                    = var.env_name == "prod" ? "snapdf-prod/argocd-webhook-secret" : "snapdf/argocd-webhook-secret"
+  description             = "Shared secret ArgoCD uses to validate incoming GitHub webhook payloads for the ${var.env_name} cluster"
+  recovery_window_in_days = 0
+
+  tags = { Environment = var.env_name, ManagedBy = "terragrunt" }
+}
+
+resource "aws_secretsmanager_secret_version" "argocd_webhook" {
+  secret_id     = aws_secretsmanager_secret.argocd_webhook.id
+  secret_string = random_password.argocd_webhook.result
+}
+
 resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
@@ -98,6 +124,11 @@ resource "helm_release" "argocd" {
   set {
     name  = "server.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-scheme"
     value = "internet-facing"
+  }
+
+  set_sensitive {
+    name  = "configs.secret.githubSecret"
+    value = random_password.argocd_webhook.result
   }
 }
 
@@ -245,14 +276,34 @@ data "kubernetes_service" "argocd" {
   depends_on = [null_resource.wait_for_load_balancers]
 }
 
+# An empty string in var.app_hostnames means "the bare apex domain" (used by
+# prod, so the live site is just snapdf.bond, not prod.snapdf.bond). A CNAME
+# record can never exist at a zone's apex -- that's a DNS spec rule, not an
+# AWS limitation -- so that one entry needs a real A-type ALIAS record instead
+# (Route53's own extension that's allowed at the apex) while every other,
+# genuinely-subdomain entry (dev./staging.snapdf.bond) stays a plain CNAME
+# exactly as before.
 resource "aws_route53_record" "app" {
   for_each = toset(var.app_hostnames)
 
   zone_id = var.route53_zone_id
-  name    = "${each.value}.${var.domain_name}"
-  type    = "CNAME"
-  ttl     = 300
-  records = [data.kubernetes_ingress_v1.nginx_alb.status[0].load_balancer[0].ingress[0].hostname]
+  name    = each.value == "" ? var.domain_name : "${each.value}.${var.domain_name}"
+  type    = each.value == "" ? "A" : "CNAME"
+  ttl     = each.value == "" ? null : 300
+  records = each.value == "" ? null : [data.kubernetes_ingress_v1.nginx_alb.status[0].load_balancer[0].ingress[0].hostname]
+
+  dynamic "alias" {
+    for_each = each.value == "" ? [1] : []
+    content {
+      name = data.kubernetes_ingress_v1.nginx_alb.status[0].load_balancer[0].ingress[0].hostname
+      # The ALB's own canonical hosted zone ID for us-east-1 -- a fixed,
+      # AWS-published per-region constant for ALBs/CLBs, unrelated to (and not
+      # to be confused with) var.route53_zone_id, which is this project's own
+      # domain's zone.
+      zone_id                = "Z35SXDOTRQ7X7K"
+      evaluate_target_health = true
+    }
+  }
 }
 
 resource "aws_route53_record" "argocd" {
@@ -343,6 +394,19 @@ resource "helm_release" "karpenter" {
   set {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
     value = var.karpenter_controller_role_arn
+  }
+
+  # infra #24: the chart defaults to 2 replicas with a hard pod anti-affinity
+  # (no two replicas on the same node) and a zone-spread topology constraint —
+  # fine when the managed node group had 2+ nodes, but deadlocks now that it's
+  # shrunk to a single fixed baseline node: Karpenter's own 2nd replica can
+  # never find a second permanent node to land on, so it sits Pending forever
+  # (confirmed live: "didn't match pod topology spread constraints"). Karpenter
+  # doesn't need HA at this project's scale — losing it briefly only pauses new
+  # scheduling decisions, it doesn't affect already-running pods/nodes.
+  set {
+    name  = "replicas"
+    value = "1"
   }
 }
 
