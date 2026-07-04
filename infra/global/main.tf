@@ -10,7 +10,8 @@ resource "aws_iam_openid_connect_provider" "github" {
 
 # ── GitHub Actions CI Role ────────────────────────────────────────────────────
 # This role is assumed by GitHub Actions during CI runs.
-# Trust is locked to the snaPDF repo on the main branch only.
+# Trust is locked to the snaPDF repo on main/staging/prod — the only branches
+# ci-*.yml actually triggers on (see `on.push.branches` in each workflow).
 
 resource "aws_iam_role" "github_actions_ci" {
   name = "github-actions-ci"
@@ -24,7 +25,11 @@ resource "aws_iam_role" "github_actions_ci" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:ilaycohen12/snaPDF:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub" = [
+            "repo:ilaycohen12/snaPDF:ref:refs/heads/main",
+            "repo:ilaycohen12/snaPDF:ref:refs/heads/staging",
+            "repo:ilaycohen12/snaPDF:ref:refs/heads/prod",
+          ]
         }
       }
     }]
