@@ -21,50 +21,65 @@ terraform {
   # running until later in this same destroy) auto-synced it back within its ~3min
   # poll window. The ALB Controller's own pods then got destroyed with the cluster
   # before AWS finished deleting the orphaned ALB, blocking VPC teardown for 69+ min.
+  # Bug 39 (05/07/2026): this hook was originally written in bash, invoked via
+  # ["bash", "-c", ...]. On this Windows machine "bash" resolves to WSL's bash.exe,
+  # and passing a multi-line script containing nested double-quotes (the
+  # `$(aws ... --query "...")` command substitutions) across the native-Windows-
+  # process -> WSL boundary corrupted the quoting, producing a bash syntax error
+  # ("unexpected token `(`") before a single command in the hook ever ran - on the
+  # very first real destroy this hook was ever exercised against. Rewritten in
+  # PowerShell (native on this machine, same tool destroy.ps1 already uses)
+  # to remove the WSL hop entirely.
   before_hook "delete_load_balancers" {
     commands = ["destroy"]
     execute = [
-      "bash", "-c",
+      "powershell", "-NoProfile", "-NonInteractive", "-Command",
       <<-EOT
-      echo "Deleting Ingress/Service objects to trigger real ALB Controller cleanup..."
-      aws eks update-kubeconfig --region us-east-1 --name snapdf-${local.env.locals.env_name} 2>/dev/null || true
+      Write-Host "Deleting Ingress/Service objects to trigger real ALB Controller cleanup..."
+      aws eks update-kubeconfig --region us-east-1 --name snapdf-${local.env.locals.env_name} 2>$null
 
       # Stop ArgoCD reconciling before deleting anything below - it isn't destroyed
       # itself until later in this same terraform destroy run, so left running it
       # would just recreate the Ingress/Service we're about to delete.
-      kubectl scale statefulset argocd-application-controller -n argocd --replicas=0 --timeout=30s 2>/dev/null || true
+      kubectl scale statefulset argocd-application-controller -n argocd --replicas=0 --timeout=30s 2>$null
 
-      kubectl delete ingress --all --all-namespaces --ignore-not-found 2>/dev/null || true
-      kubectl delete svc ingress-nginx-controller -n ingress-nginx --ignore-not-found 2>/dev/null || true
-      kubectl delete svc argocd-server -n argocd --ignore-not-found 2>/dev/null || true
+      kubectl delete ingress --all --all-namespaces --ignore-not-found 2>$null
+      kubectl delete svc ingress-nginx-controller -n ingress-nginx --ignore-not-found 2>$null
+      kubectl delete svc argocd-server -n argocd --ignore-not-found 2>$null
 
-      VPC_ID="${dependency.vpc.outputs.vpc_id}"
-      echo "Polling AWS for load balancers in $VPC_ID (replaces the old blind 90s sleep)..."
-      COUNT=1
-      for i in $(seq 1 20); do
-        COUNT=$(aws elbv2 describe-load-balancers --query "length(LoadBalancers[?VpcId=='$VPC_ID'])" --output text 2>/dev/null)
-        COUNT=$${COUNT:-0}
-        if [ "$COUNT" = "0" ] || [ "$COUNT" = "None" ]; then
-          echo "No load balancers remain in $VPC_ID."
+      $VPC_ID = "${dependency.vpc.outputs.vpc_id}"
+      Write-Host "Polling AWS for load balancers in $VPC_ID (replaces the old blind 90s sleep)..."
+      $COUNT = "1"
+      for ($i = 1; $i -le 20; $i++) {
+        $COUNT = aws elbv2 describe-load-balancers --query "length(LoadBalancers[?VpcId=='$VPC_ID'])" --output text 2>$null
+        if (-not $COUNT) { $COUNT = "0" }
+        if ($COUNT -eq "0" -or $COUNT -eq "None") {
+          Write-Host "No load balancers remain in $VPC_ID."
           break
-        fi
-        echo "  $COUNT LB(s) still exist - waiting 15s (attempt $i/20)..."
-        sleep 15
-      done
-      if [ "$COUNT" != "0" ] && [ "$COUNT" != "None" ]; then
-        echo "WARNING: $COUNT load balancer(s) still present in $VPC_ID after 5min - vpc module destroy will likely fail with DependencyViolation. Manual cleanup needed: aws elbv2 delete-load-balancer."
-      fi
+        }
+        Write-Host "  $COUNT LB(s) still exist - waiting 15s (attempt $i/20)..."
+        Start-Sleep -Seconds 15
+      }
+      if ($COUNT -ne "0" -and $COUNT -ne "None") {
+        Write-Host "WARNING: $COUNT load balancer(s) still present in $VPC_ID after 5min - vpc module destroy will likely fail with DependencyViolation. Manual cleanup needed: aws elbv2 delete-load-balancer."
+      }
 
       # ALB Controller-created security groups aren't Terraform-managed and won't be
       # cleaned up by the vpc module destroy - delete any leftover ones now that their
       # ENIs should have released along with the LB(s) above.
-      sleep 10
-      for sg in $(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=k8s-*" --query "SecurityGroups[*].GroupId" --output text 2>/dev/null); do
-        echo "Deleting leftover ALB-controller security group $sg"
-        aws ec2 delete-security-group --group-id "$sg" 2>/dev/null || true
-      done
+      Start-Sleep -Seconds 10
+      $sgs = aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=k8s-*" --query "SecurityGroups[*].GroupId" --output text 2>$null
+      if ($sgs) {
+        foreach ($sg in ($sgs -split '\s+')) {
+          if ($sg) {
+            Write-Host "Deleting leftover ALB-controller security group $sg"
+            aws ec2 delete-security-group --group-id $sg 2>$null
+          }
+        }
+      }
 
-      echo "Proceeding with terraform destroy."
+      Write-Host "Proceeding with terraform destroy."
+      exit 0
       EOT
     ]
   }
