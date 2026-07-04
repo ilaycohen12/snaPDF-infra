@@ -101,6 +101,103 @@ resource "helm_release" "argocd" {
   }
 }
 
+# ── Bootstrap ArgoCD's root Application (infra #17) ──────────────────────────
+# Previously the one remaining manual step in this entire system: someone had
+# to remember to run `kubectl apply -f infra/bootstrap/root-app{,-prod}.yaml`
+# by hand after every fresh cluster stand-up, using the RIGHT file for the
+# RIGHT cluster. Got this wrong for real on 04/07/2026 — applied dev's
+# manifest (path: apps/dev) to prod, which briefly ran dev/staging workloads
+# inside the prod cluster (cleaned up by hand; see documentation.md).
+#
+# Automated here by inlining the manifest and picking the path by
+# var.env_name, so there's no separate file to remember or mismatch.
+# Uses local-exec + raw kubectl rather than the `kubernetes_manifest`
+# resource: that resource needs to resolve the target CRD's schema at plan
+# time, and ArgoCD's own `Application` CRD is installed by helm_release.argocd
+# in this SAME apply — on a truly fresh cluster the CRD doesn't exist yet when
+# planning starts, which `depends_on` alone doesn't fix for that resource type.
+# Raw kubectl has no such restriction.
+resource "null_resource" "argocd_root_bootstrap" {
+  triggers = {
+    manifest = yamlencode({
+      apiVersion = "argoproj.io/v1alpha1"
+      kind       = "Application"
+      metadata = {
+        name       = "root"
+        namespace  = "argocd"
+        finalizers = ["resources-finalizer.argocd.argoproj.io"]
+      }
+      spec = {
+        project = "default"
+        source = {
+          repoURL        = "https://github.com/ilaycohen12/snaPDF-gitops.git"
+          targetRevision = "HEAD"
+          path           = var.env_name == "prod" ? "apps/prod" : "apps/dev"
+        }
+        destination = {
+          server    = "https://kubernetes.default.svc"
+          namespace = "argocd"
+        }
+        syncPolicy = {
+          automated = {
+            prune    = true
+            selfHeal = true
+          }
+        }
+      }
+    })
+  }
+
+  provisioner "local-exec" {
+    command     = <<-EOT
+      set -e
+      aws eks update-kubeconfig --region ${data.aws_region.current.name} --name ${var.cluster_name}
+      cat <<'MANIFEST' | kubectl apply -f -
+      ${self.triggers.manifest}
+      MANIFEST
+    EOT
+    interpreter = ["bash", "-c"]
+  }
+
+  depends_on = [helm_release.argocd]
+}
+
+# ── Wait for real load balancer hostnames before anything reads them ────────
+# aws_route53_record.app/.argocd/.grafana below all read a live Kubernetes
+# object's status — the ALB Controller's real AWS ALB for nginx-alb's Ingress
+# (only created once ArgoCD, bootstrapped just above, has actually synced it),
+# and ArgoCD's own LoadBalancer Service. Both take real wall-clock minutes to
+# provision, entirely outside a single `terraform apply`'s control — hit this
+# exact race on every from-zero rebuild so far (03/07, and twice more on
+# 04/07/2026 for dev and prod). Polls instead of a blind sleep, same lesson
+# already learned for LB *deletion* in this module's terragrunt.hcl destroy
+# hook (Bug 34).
+resource "null_resource" "wait_for_load_balancers" {
+  provisioner "local-exec" {
+    command     = <<-EOT
+      set -e
+      aws eks update-kubeconfig --region ${data.aws_region.current.name} --name ${var.cluster_name}
+      echo "Waiting for nginx-alb Ingress and argocd-server Service to get real load balancer hostnames..."
+      for i in $(seq 1 40); do
+        ALB_HOST=$(kubectl get ingress nginx-alb -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+        ARGOCD_HOST=$(kubectl get svc argocd-server -n argocd -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+        if [ -n "$ALB_HOST" ] && [ -n "$ARGOCD_HOST" ]; then
+          echo "ALB ready: $ALB_HOST"
+          echo "ArgoCD LB ready: $ARGOCD_HOST"
+          exit 0
+        fi
+        echo "  not ready yet (alb='$ALB_HOST' argocd='$ARGOCD_HOST') - waiting 15s (attempt $i/40)..."
+        sleep 15
+      done
+      echo "ERROR: load balancers never became ready after 10 minutes."
+      exit 1
+    EOT
+    interpreter = ["bash", "-c"]
+  }
+
+  depends_on = [null_resource.argocd_root_bootstrap]
+}
+
 # ── Nginx Ingress Controller ──────────────────────────────────────────────────
 # controller.service.type is ClusterIP (not the chart's default LoadBalancer) —
 # Nginx no longer creates its own AWS load balancer. Real internet traffic now
@@ -137,6 +234,7 @@ data "kubernetes_ingress_v1" "nginx_alb" {
     name      = "nginx-alb"
     namespace = "ingress-nginx"
   }
+  depends_on = [null_resource.wait_for_load_balancers]
 }
 
 data "kubernetes_service" "argocd" {
@@ -144,7 +242,7 @@ data "kubernetes_service" "argocd" {
     name      = "argocd-server"
     namespace = "argocd"
   }
-  depends_on = [helm_release.argocd]
+  depends_on = [null_resource.wait_for_load_balancers]
 }
 
 resource "aws_route53_record" "app" {
