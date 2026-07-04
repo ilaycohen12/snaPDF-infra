@@ -34,9 +34,16 @@ module "eks" {
     default = {
       name           = "${var.cluster_name}-nodes"  # e.g. "snapdf-dev-nodes"
       instance_types = [var.node_instance_type]     # ["t3.medium"]
-      min_size       = 1                            # never go below 1 node
-      max_size       = 3                            # can scale up to 3 under load
-      desired_size   = 2                            # 2 nodes is enough for t3.medium
+      # infra #24: shrunk from min=1/max=3/desired=2 now that Karpenter is proven
+      # (real scale-up/scale-down watched live on both dev and prod, Phase 6/v0.7.0).
+      # This group is now just a fixed floor — somewhere for CoreDNS, the ALB
+      # Controller, and Karpenter's own controller pod to run even before Karpenter
+      # has provisioned anything itself — not a second source of elasticity.
+      # Karpenter's NodePool (6 vCPU/12GiB dev, 9 vCPU/18GiB prod) owns all real
+      # demand above this floor now.
+      min_size       = 1                            # never zero — Karpenter itself needs somewhere to run
+      max_size       = 1
+      desired_size   = 1
 
       # Explicit, not left to default — the module only generates nodeadm-format user
       # data (required for cloudinit_pre_nodeadm below to actually take effect) when
