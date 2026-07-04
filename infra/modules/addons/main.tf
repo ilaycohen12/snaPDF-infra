@@ -514,6 +514,82 @@ resource "helm_release" "postgres_exporter" {
   }
 }
 
+# ── One-off: ensure the "snapdf_staging" logical database exists ────────────
+# Terraform only manages the RDS *instance* + its one default database
+# (the `rds` module's var.db_name) — "snapdf_staging" is a second logical
+# database living on that same instance (Bug 31, 02/07/2026), originally
+# created once by hand via psql. A from-scratch RDS instance never has it,
+# and this was hit again on the 04/07/2026 full-VPC rebuild (Bug 37).
+# RDS is private (publicly_accessible = false, reachable only from EKS
+# worker nodes), so a Terraform `postgresql` provider connecting from
+# wherever `terraform apply` runs isn't an option — this runs as its own
+# self-contained Job pod on a worker node instead, using the exact same
+# `local.db_creds` this module's postgres_exporter above already reads
+# (kept fresh by the `rds` module's new secret-sync resource). Keyed to
+# var.rds_resource_id (the instance's internal ID, not its identifier) so
+# it only actually re-runs when the RDS instance is genuinely new, not on
+# every ordinary apply.
+resource "kubernetes_job_v1" "ensure_staging_database" {
+  count = var.env_name == "dev" && var.rds_resource_id != "" ? 1 : 0
+
+  metadata {
+    name      = "ensure-staging-database-${lower(var.rds_resource_id)}"
+    namespace = "default"
+  }
+
+  spec {
+    backoff_limit = 2
+    template {
+      metadata {
+        name = "ensure-staging-database"
+      }
+      spec {
+        restart_policy = "Never"
+        container {
+          name    = "psql"
+          image   = "postgres:16-alpine"
+          command = ["sh", "-c", <<-EOT
+            set -e
+            EXISTS=$(psql -tAc "SELECT 1 FROM pg_database WHERE datname='snapdf_staging'")
+            if [ "$EXISTS" != "1" ]; then
+              echo "snapdf_staging missing, creating..."
+              psql -c "CREATE DATABASE snapdf_staging"
+            else
+              echo "snapdf_staging already exists, nothing to do."
+            fi
+          EOT
+          ]
+          env {
+            name  = "PGHOST"
+            value = local.db_creds.host
+          }
+          env {
+            name  = "PGUSER"
+            value = local.db_creds.username
+          }
+          env {
+            name  = "PGPASSWORD"
+            value = local.db_creds.password
+          }
+          env {
+            name  = "PGDATABASE"
+            value = "snapdf"
+          }
+          env {
+            name  = "PGSSLMODE"
+            value = "require"
+          }
+        }
+      }
+    }
+  }
+
+  wait_for_completion = true
+  timeouts {
+    create = "3m"
+  }
+}
+
 # Grafana's Ingress is routed through Nginx now (kubernetes.io/ingress.class:
 # nginx), not the ALB controller directly — the ALB IngressGroup path hit an
 # unresolved bug where Grafana's rule never got merged onto the shared ALB.

@@ -77,3 +77,9 @@ variable "ebs_csi_role_arn" {
   description = "IAM role ARN for the EBS CSI driver — annotated onto its service account via the EKS addon's service_account_role_arn"
   type        = string
 }
+
+variable "rds_resource_id" {
+  description = "RDS instance's AWS-internal resource_id (not its identifier — this changes on every real instance recreate). Used to key the one-off staging-database job so it only re-runs when the instance is genuinely new. Empty string on environments with no staging database (e.g. prod)."
+  type        = string
+  default     = ""
+}

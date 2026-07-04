@@ -117,6 +117,19 @@ dependency "global" {
   mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
+# Only needed so the addons module can key its one-off "ensure snapdf_staging
+# exists" job to this instance's real identity (see Bug 37) — dev is the only
+# environment with a staging database.
+dependency "rds" {
+  config_path = "../rds"
+
+  mock_outputs = {
+    resource_id = "db-mock00000000000000000"
+  }
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
+}
+
 inputs = {
   env_name                           = local.env.locals.env_name
   cluster_name                       = dependency.eks.outputs.cluster_name
@@ -134,4 +147,5 @@ inputs = {
   karpenter_controller_role_arn      = dependency.iam.outputs.karpenter_controller_role_arn
   karpenter_node_role_arn            = dependency.iam.outputs.karpenter_node_role_arn
   ebs_csi_role_arn                   = dependency.iam.outputs.ebs_csi_role_arn
+  rds_resource_id                    = dependency.rds.outputs.resource_id
 }

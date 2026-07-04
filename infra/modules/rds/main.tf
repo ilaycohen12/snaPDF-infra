@@ -54,3 +54,31 @@ resource "aws_db_instance" "main" {
     ManagedBy   = "terragrunt"
   }
 }
+
+# ── Keep the app-facing secret in sync with the real master password ────────
+# manage_master_user_password generates a brand-new random password every time
+# this instance is created (even a same-config recreate) and stores it in its
+# own hidden, AWS-managed secret. ESO/postgres_exporter don't read that one
+# directly though — they read a separate "consolidated" secret (bundling
+# host+username+password) that was originally created by hand and, until now,
+# had to be manually rebuilt after every RDS recreate (Bug 29 on 02/07/2026,
+# recurred on both dev and prod during the 04/07/2026 full-VPC rebuild).
+# This only ever writes a new *version* onto the existing secret (read via
+# `data`, never created/imported here) — so it works with the secret exactly
+# as it's always existed, no state-ownership migration needed.
+data "aws_secretsmanager_secret_version" "master" {
+  secret_id = aws_db_instance.main.master_user_secret[0].secret_arn
+}
+
+data "aws_secretsmanager_secret" "consolidated" {
+  name = var.env_name == "prod" ? "snapdf-prod/db-credentials" : "snapdf/db-credentials"
+}
+
+resource "aws_secretsmanager_secret_version" "consolidated" {
+  secret_id = data.aws_secretsmanager_secret.consolidated.id
+  secret_string = jsonencode({
+    username = var.db_username
+    host     = aws_db_instance.main.address
+    password = jsondecode(data.aws_secretsmanager_secret_version.master.secret_string).password
+  })
+}
