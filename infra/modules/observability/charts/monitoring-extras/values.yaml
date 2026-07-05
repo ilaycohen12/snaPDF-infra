@@ -1,0 +1,22 @@
+# ServiceMonitors for custom app-level metrics. Empty for now — api/auth/worker
+# don't expose a /metrics endpoint yet. The moment one of them adds real
+# instrumentation (e.g. via prometheus_client), add an entry here rather than
+# hand-writing a ServiceMonitor object directly against the cluster.
+serviceMonitors: []
+  # - name: api
+  #   namespace: production
+  #   selector:
+  #     matchLabels:
+  #       app: api-production
+  #   port: metrics
+  #   path: /metrics
+  #   interval: 30s
+
+# Grafana dashboards. Each key becomes a ConfigMap (grafana-dashboard-<key>)
+# carrying the grafana_dashboard: "1" label kube-prometheus-stack's Grafana
+# sidecar already watches for — same auto-load mechanism this project used
+# when the dashboard lived in snaPDF-gitops, just applied by Terraform now.
+dashboards:
+  snapdf-business:
+    enabled: true
+    file: snapdf-business-scaling.json

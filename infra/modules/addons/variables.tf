@@ -33,11 +33,6 @@ variable "eso_role_arn" {
   type        = string
 }
 
-variable "keda_role_arn" {
-  description = "IAM role ARN for KEDA — annotated onto its service account via Helm values"
-  type        = string
-}
-
 variable "route53_zone_id" {
   description = "Hosted zone ID for snapdf.bond, from the global module — used to create this environment's DNS records"
   type        = string
@@ -55,26 +50,6 @@ variable "app_hostnames" {
 
 variable "argocd_hostname" {
   description = "Subdomain label for this environment's ArgoCD UI, e.g. \"argocd-dev\" or \"argocd-prod\""
-  type        = string
-}
-
-variable "karpenter_controller_role_arn" {
-  description = "IAM role ARN for the Karpenter controller — annotated onto its service account via Helm values"
-  type        = string
-}
-
-variable "karpenter_node_role_arn" {
-  description = "IAM role ARN for Karpenter-provisioned nodes — granted an EKS access entry here so those nodes can actually authenticate and register with the cluster"
-  type        = string
-}
-
-variable "grafana_hostname" {
-  description = "Subdomain label for this environment's Grafana UI, e.g. \"grafana-dev\" or \"grafana-prod\""
-  type        = string
-}
-
-variable "ebs_csi_role_arn" {
-  description = "IAM role ARN for the EBS CSI driver — annotated onto its service account via the EKS addon's service_account_role_arn"
   type        = string
 }
 

@@ -111,12 +111,8 @@ dependency "iam" {
   config_path = "../iam"
 
   mock_outputs = {
-    alb_controller_role_arn       = "arn:aws:iam::123456789012:role/snapdf-dev-alb-controller"
-    eso_role_arn                  = "arn:aws:iam::123456789012:role/snapdf-dev-eso"
-    keda_role_arn                 = "arn:aws:iam::123456789012:role/snapdf-dev-keda"
-    karpenter_controller_role_arn = "arn:aws:iam::123456789012:role/snapdf-dev-karpenter-controller"
-    karpenter_node_role_arn       = "arn:aws:iam::123456789012:role/snapdf-dev-karpenter-node"
-    ebs_csi_role_arn              = "arn:aws:iam::123456789012:role/snapdf-dev-ebs-csi"
+    alb_controller_role_arn = "arn:aws:iam::123456789012:role/snapdf-dev-alb-controller"
+    eso_role_arn            = "arn:aws:iam::123456789012:role/snapdf-dev-eso"
   }
 
   mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
@@ -153,14 +149,9 @@ inputs = {
   vpc_id                             = dependency.vpc.outputs.vpc_id
   alb_controller_role_arn            = dependency.iam.outputs.alb_controller_role_arn
   eso_role_arn                       = dependency.iam.outputs.eso_role_arn
-  keda_role_arn                      = dependency.iam.outputs.keda_role_arn
   route53_zone_id                    = dependency.global.outputs.route53_zone_id
   domain_name                        = "snapdf.bond"
   app_hostnames                      = ["dev", "staging"]
   argocd_hostname                    = "argocd-dev"
-  grafana_hostname                   = "grafana-dev"
-  karpenter_controller_role_arn      = dependency.iam.outputs.karpenter_controller_role_arn
-  karpenter_node_role_arn            = dependency.iam.outputs.karpenter_node_role_arn
-  ebs_csi_role_arn                   = dependency.iam.outputs.ebs_csi_role_arn
   rds_resource_id                    = dependency.rds.outputs.resource_id
 }

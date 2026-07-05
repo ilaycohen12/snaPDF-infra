@@ -1,0 +1,9 @@
+apiVersion: v2
+name: monitoring-extras
+description: >
+  Custom ServiceMonitors and Grafana dashboards for snaPDF, layered on top of
+  kube-prometheus-stack (installed separately by this same addons module).
+  Kept as its own chart rather than folded into kube-prometheus-stack's own
+  values, or a bare ConfigMap, so app-level observability content has one
+  clear home as the project adds real metrics later.
+version: 0.1.0

@@ -1,0 +1,96 @@
+{
+  "uid": "snapdf-business-scaling",
+  "title": "snaPDF - Business & Scaling Metrics",
+  "tags": ["snapdf"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Total Registered Users",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "snapdf_users_total_count",
+          "legendFormat": "users",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Free-Tier Jobs by Status",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "gridPos": { "h": 8, "w": 9, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "expr": "snapdf_free_jobs_by_status_count",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Signed-Tier Jobs by Status",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "gridPos": { "h": 8, "w": 9, "x": 15, "y": 0 },
+      "targets": [
+        {
+          "expr": "snapdf_signed_jobs_by_status_count",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "signed-worker - KEDA Scaler Active",
+      "type": "timeseries",
+      "description": "Whether KEDA considers the signed-worker scaler active (0/1). Empty until the signed-worker ScaledObject exists.",
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "min": 0, "max": 1 }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "keda_scaler_active{scaledObject=~\".*signed-worker.*\"}",
+          "legendFormat": "{{scaler}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "signed-worker - SQS Queue Depth Seen by KEDA",
+      "type": "timeseries",
+      "description": "Raw metric value KEDA's aws-sqs-queue trigger is scaling on. Empty until the signed-worker ScaledObject exists.",
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "keda_scaler_metrics_value{scaledObject=~\".*signed-worker.*\"}",
+          "legendFormat": "{{metric}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

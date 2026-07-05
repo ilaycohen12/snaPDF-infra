@@ -1,0 +1,21 @@
+{{- range .Values.serviceMonitors }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .name }}
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .namespace }}
+  selector:
+    matchLabels:
+      {{- toYaml .selector.matchLabels | nindent 6 }}
+  endpoints:
+    - port: {{ .port }}
+      path: {{ .path | default "/metrics" }}
+      interval: {{ .interval | default "30s" }}
+---
+{{- end }}
