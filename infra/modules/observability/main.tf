@@ -24,10 +24,11 @@ provider "kubernetes" {
 
 # ── DNS: reads the ALB Controller's real AWS ALB for nginx-alb's Ingress ────
 # Own copy of this data source, not a shared output from the addons module —
-# this module's own terragrunt.hcl declares a `dependency` on addons purely to
-# enforce apply order (nginx/ALB controller/ArgoCD bootstrap must finish
-# first); it doesn't need any of addons's actual outputs, since re-reading the
-# same live Ingress object here is simpler than wiring a cross-module output
+# this module's own terragrunt.hcl declares a `dependencies` on addons purely
+# to enforce apply order (alb_controller/nginx/the nginx-alb Ingress itself
+# must finish first); it doesn't need any of addons's actual outputs, since
+# re-reading the same live Ingress object here is simpler than wiring a
+# cross-module output
 # for a value that's just as easy to read directly.
 data "kubernetes_ingress_v1" "nginx_alb" {
   metadata {
@@ -312,12 +313,46 @@ resource "helm_release" "monitoring_extras" {
   depends_on = [helm_release.kube_prometheus_stack]
 }
 
-# Grafana's Ingress is routed through Nginx (kubernetes.io/ingress.class:
-# nginx), not the ALB controller directly — the ALB IngressGroup path hit an
-# unresolved bug where Grafana's rule never got merged onto the shared ALB
-# (Bug 34). Reuses the exact same ALB hostname the app's own Route53 record
-# points at — Grafana's traffic reaches the identical physical ALB, just via
-# Nginx's internal host-based routing instead of a second ALB-level rule.
+# Grafana's Ingress — was applied by ArgoCD from gitops
+# (apps/{env}/grafana-ingress.yaml), moved here so it's applied automatically
+# by the same terragrunt apply that installs Grafana itself, no gitops sync
+# required. Routed through Nginx (kubernetes.io/ingress.class: nginx), not the
+# ALB controller directly — the ALB IngressGroup path hit an unresolved bug
+# where Grafana's rule never got merged onto the shared ALB (Bug 34).
+resource "kubernetes_ingress_v1" "grafana" {
+  metadata {
+    name      = "grafana"
+    namespace = "monitoring"
+    annotations = {
+      "kubernetes.io/ingress.class" = "nginx"
+    }
+  }
+  spec {
+    rule {
+      host = "${var.grafana_hostname}.${var.domain_name}"
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = "kube-prometheus-stack-grafana"
+              port {
+                number = 80
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [helm_release.kube_prometheus_stack]
+}
+
+# Reuses the exact same ALB hostname the app's own Route53 record points at —
+# Grafana's traffic reaches the identical physical ALB, just via Nginx's
+# internal host-based routing instead of a second ALB-level rule.
 resource "aws_route53_record" "grafana" {
   zone_id = var.route53_zone_id
   name    = "${var.grafana_hostname}.${var.domain_name}"

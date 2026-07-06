@@ -1,3 +1,7 @@
+locals {
+  env = read_terragrunt_config(find_in_parent_folders("env.hcl"))
+}
+
 include "root" {
   path = find_in_parent_folders()
 }
@@ -33,10 +37,25 @@ dependency "iam" {
   mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
+dependency "vpc" {
+  config_path = "../vpc"
+
+  mock_outputs = {
+    private_subnet_ids = ["subnet-00000000000000001", "subnet-00000000000000002"]
+  }
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
+}
+
 inputs = {
   cluster_name                       = dependency.eks.outputs.cluster_name
   cluster_endpoint                   = dependency.eks.outputs.cluster_endpoint
   cluster_certificate_authority_data = dependency.eks.outputs.cluster_certificate_authority_data
   karpenter_controller_role_arn      = dependency.iam.outputs.karpenter_controller_role_arn
   karpenter_node_role_arn            = dependency.iam.outputs.karpenter_node_role_arn
+  env_name                           = local.env.locals.env_name
+  node_instance_types                = ["t3.medium", "t3.large", "t3.xlarge"]
+  node_cpu_limit                     = "9"
+  node_memory_limit                  = "18Gi"
+  private_subnet_ids                 = dependency.vpc.outputs.private_subnet_ids
 }

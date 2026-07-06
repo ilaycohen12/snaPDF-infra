@@ -92,6 +92,45 @@ module "eks" {
   }
 }
 
+# The module's own default node_security_group_additional_rules only lets
+# CoreDNS traffic in from the node security group itself (self-referencing) —
+# fine as long as every pod that needs DNS runs on the managed node group.
+# Karpenter's Fargate profile breaks that assumption: Fargate pods get ENIs in
+# AWS's own auto-created implicit "cluster security group" (what
+# `aws eks describe-cluster` reports as `clusterSecurityGroupId`), not the
+# node security group, so their DNS queries to CoreDNS were being silently
+# dropped at the node SG's ingress rule. Confirmed live: `nslookup` from a
+# debug pod on the same Fargate profile timed out ("no servers could be
+# reached"), which is why Karpenter's own controller crash-looped — its EC2
+# API connectivity check couldn't resolve sts.us-east-1.amazonaws.com at all.
+#
+# Standalone resources, not the module's own `node_security_group_additional_
+# rules` input — that shorthand's `source_cluster_security_group = true`
+# resolves to a *different* SG the module itself creates
+# (`aws_security_group.cluster`), not the AWS-implicit one Fargate actually
+# attaches to pod ENIs. The real one is only known via `module.eks`'s own
+# `cluster_primary_security_group_id` *output*, which can't be fed back in as
+# one of the same module's own inputs (circular reference) — has to live here.
+resource "aws_security_group_rule" "node_ingress_cluster_coredns_tcp" {
+  description              = "Cluster/Fargate SG to node CoreDNS TCP"
+  type                     = "ingress"
+  protocol                 = "tcp"
+  from_port                = 53
+  to_port                  = 53
+  security_group_id        = module.eks.node_security_group_id
+  source_security_group_id = module.eks.cluster_primary_security_group_id
+}
+
+resource "aws_security_group_rule" "node_ingress_cluster_coredns_udp" {
+  description              = "Cluster/Fargate SG to node CoreDNS UDP"
+  type                     = "ingress"
+  protocol                 = "udp"
+  from_port                = 53
+  to_port                  = 53
+  security_group_id        = module.eks.node_security_group_id
+  source_security_group_id = module.eks.cluster_primary_security_group_id
+}
+
 # Karpenter discovers which subnets it's allowed to launch nodes into via this
 # tag (referenced in the EC2NodeClass's subnetSelectorTerms) — existing tags
 # (Environment, Project) aren't precise enough on their own since they also

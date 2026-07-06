@@ -365,7 +365,15 @@ resource "aws_iam_role" "karpenter_controller" {
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          "${local.oidc_url}:sub" = "system:serviceaccount:kube-system:karpenter"
+          # Karpenter's own controller moved off the managed node group onto a
+          # dedicated Fargate profile, into its own "karpenter" namespace (not
+          # kube-system — Fargate profiles match by namespace, and kube-system
+          # also holds DaemonSets/host-networked pods that can't run on
+          # Fargate at all). Confirmed live: with this still pointed at
+          # kube-system, AssumeRoleWithWebIdentity came back 403 AccessDenied
+          # — the OIDC subject in the real token (karpenter:karpenter) didn't
+          # match what this trust policy allowed.
+          "${local.oidc_url}:sub" = "system:serviceaccount:karpenter:karpenter"
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
         }
       }

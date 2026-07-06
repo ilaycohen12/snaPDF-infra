@@ -122,7 +122,8 @@ dependency "global" {
   config_path = "../../../global"
 
   mock_outputs = {
-    route53_zone_id = "Z0000000000000000000"
+    route53_zone_id    = "Z0000000000000000000"
+    acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
   }
 
   mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
@@ -150,8 +151,8 @@ inputs = {
   alb_controller_role_arn            = dependency.iam.outputs.alb_controller_role_arn
   eso_role_arn                       = dependency.iam.outputs.eso_role_arn
   route53_zone_id                    = dependency.global.outputs.route53_zone_id
+  acm_certificate_arn                = dependency.global.outputs.acm_certificate_arn
   domain_name                        = "snapdf.bond"
   app_hostnames                      = ["dev", "staging"]
-  argocd_hostname                    = "argocd-dev"
   rds_resource_id                    = dependency.rds.outputs.resource_id
 }

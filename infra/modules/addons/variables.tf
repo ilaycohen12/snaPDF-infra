@@ -48,8 +48,8 @@ variable "app_hostnames" {
   type        = list(string)
 }
 
-variable "argocd_hostname" {
-  description = "Subdomain label for this environment's ArgoCD UI, e.g. \"argocd-dev\" or \"argocd-prod\""
+variable "acm_certificate_arn" {
+  description = "Validated wildcard cert ARN for *.snapdf.bond, from the global module's output — wired directly into the ALB Ingress's certificate-arn annotation now that this Ingress is Terraform-managed instead of a gitops YAML file with the ARN pasted in by hand"
   type        = string
 }
 

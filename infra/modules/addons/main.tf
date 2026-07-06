@@ -79,174 +79,63 @@ resource "helm_release" "eso" {
   }
 }
 
-# ── ArgoCD ────────────────────────────────────────────────────────────────────
-# infra #25: GitHub -> ArgoCD webhook, so a push reaches ArgoCD instantly instead
-# of waiting out its default ~180s poll interval (gap found during the rollback
-# drill). This secret is what ArgoCD uses to validate that an incoming webhook
-# payload's signature really came from GitHub -- the argo-cd Helm chart's
-# configs.secret.githubSecret value populates the exact field ArgoCD checks.
-# The other half -- actually registering the webhook on the snaPDF-gitops repo
-# -- is done once via `gh api`, not Terraform: adding a whole GitHub provider
-# (+ its own PAT credential) for one webhook per environment isn't proportionate.
-resource "random_password" "argocd_webhook" {
-  length  = 32
-  special = false
-}
+# ArgoCD (helm_release, root bootstrap, webhook secret, its own DNS record)
+# moved to modules/argocd — was stuck here because wait_for_load_balancers
+# below used to depend on ArgoCD having synced the gitops-managed nginx-alb
+# Ingress before the ALB Controller had anything to provision from. Now that
+# nginx-alb is a Terraform resource (below) instead of gitops content, that
+# cycle is gone and ArgoCD can live in its own module like everything else.
 
-resource "aws_secretsmanager_secret" "argocd_webhook" {
-  name                    = var.env_name == "prod" ? "snapdf-prod/argocd-webhook-secret" : "snapdf/argocd-webhook-secret"
-  description             = "Shared secret ArgoCD uses to validate incoming GitHub webhook payloads for the ${var.env_name} cluster"
-  recovery_window_in_days = 0
-
-  tags = { Environment = var.env_name, ManagedBy = "terragrunt" }
-}
-
-resource "aws_secretsmanager_secret_version" "argocd_webhook" {
-  secret_id     = aws_secretsmanager_secret.argocd_webhook.id
-  secret_string = random_password.argocd_webhook.result
-}
-
-resource "helm_release" "argocd" {
-  name             = "argocd"
-  repository       = "https://argoproj.github.io/argo-helm"
-  chart            = "argo-cd"
-  namespace        = "argocd"
-  version          = "6.7.3"
-  create_namespace = true
-  wait             = false
-  depends_on       = [helm_release.alb_controller, helm_release.nginx]
-
-  # infra #26: ArgoCD used to be its own type: LoadBalancer Service, creating a
-  # second, dedicated NLB per environment alongside the one ALB everything else
-  # shares via Nginx. Now ClusterIP + an Ingress below, routed through the same
-  # shared Nginx/ALB as api/auth/Grafana — one load balancer per environment,
-  # not two. Confirmed against the actual chart source (argo-cd 6.7.3) before
-  # writing these — `server.insecure` isn't a real top-level value in this
-  # chart version, it only exists via configs.params; the chart's own
-  # server-ingress.yaml template reads that exact key to decide which Service
-  # port (http vs https) to point the Ingress at.
-  set {
-    name  = "server.service.type"
-    value = "ClusterIP"
+# ── ALB Ingress: the one real AWS load balancer everything shares ───────────
+# Used to be applied by ArgoCD from gitops (apps/{env}/nginx-alb-ingress.yaml)
+# — moved here specifically to break the cycle noted above, and because a
+# from-zero cluster no longer needs ArgoCD bootstrapped just to get its own
+# networking up. certificate_arn now comes directly from the global module's
+# own output instead of being pasted into a YAML file by hand (that output's
+# own description used to say "not wired automatically since Ingress YAML
+# lives outside Terraform" — this closes that gap).
+resource "kubernetes_ingress_v1" "nginx_alb" {
+  metadata {
+    name      = "nginx-alb"
+    namespace = "ingress-nginx"
+    annotations = {
+      "alb.ingress.kubernetes.io/scheme"          = "internet-facing"
+      "alb.ingress.kubernetes.io/target-type"     = "ip"
+      "alb.ingress.kubernetes.io/certificate-arn" = var.acm_certificate_arn
+      "alb.ingress.kubernetes.io/listen-ports"    = jsonencode([{ HTTP = 80 }, { HTTPS = 443 }])
+      "alb.ingress.kubernetes.io/ssl-redirect"    = "443"
+    }
   }
-
-  set {
-    name  = "configs.params.server\\.insecure"
-    value = "true"
-  }
-
-  set {
-    name  = "server.ingress.enabled"
-    value = "true"
-  }
-
-  set {
-    name  = "server.ingress.hostname"
-    value = "${var.argocd_hostname}.${var.domain_name}"
-  }
-
-  # NOT setting nginx.ingress.kubernetes.io/backend-protocol=GRPC here,
-  # deliberately, despite ArgoCD's server multiplexing its web UI and the
-  # `argocd` CLI's gRPC API on the same port — tried it live, it broke the web
-  # UI. That annotation makes nginx proxy EVERY request through this Ingress
-  # as raw gRPC, including plain browser page loads — a bare `HEAD /` isn't
-  # gRPC-framed, so the backend resets the connection (confirmed live: nginx's
-  # own error log showed "recv() failed (104: Connection reset by peer) ...
-  # upstream: grpc://..." for an ordinary HEAD request). Serving plain
-  # HTTP/HTTPS instead (like every other Ingress here) means the web UI just
-  # works; the `argocd` CLI needs `--grpc-web` (translates gRPC calls over
-  # regular HTTP/1.1) since raw unary/streaming gRPC isn't supported through
-  # this Ingress — that's ArgoCD's own documented workaround for exactly this
-  # class of ingress, not a workaround invented here.
-
-  # No ingressClassName set (spec.ingressClassName) — the nginx controller
-  # here runs with --ingress-class=nginx and no --watch-ingress-without-class,
-  # so it only picks up Ingresses carrying this legacy annotation instead
-  # (confirmed: api-dev/auth-dev/Grafana's Ingress objects all use this same
-  # annotation, none set ingressClassName — this one silently went unpicked-up
-  # by nginx without it, live 404 despite Terraform reporting apply success).
-  set {
-    name  = "server.ingress.annotations.kubernetes\\.io/ingress\\.class"
-    value = "nginx"
-  }
-
-  set_sensitive {
-    name  = "configs.secret.githubSecret"
-    value = random_password.argocd_webhook.result
-  }
-}
-
-# ── Bootstrap ArgoCD's root Application (infra #17) ──────────────────────────
-# Previously the one remaining manual step in this entire system: someone had
-# to remember to run `kubectl apply -f infra/bootstrap/root-app{,-prod}.yaml`
-# by hand after every fresh cluster stand-up, using the RIGHT file for the
-# RIGHT cluster. Got this wrong for real on 04/07/2026 — applied dev's
-# manifest (path: apps/dev) to prod, which briefly ran dev/staging workloads
-# inside the prod cluster (cleaned up by hand; see documentation.md).
-#
-# Automated here by inlining the manifest and picking the path by
-# var.env_name, so there's no separate file to remember or mismatch.
-# Uses local-exec + raw kubectl rather than the `kubernetes_manifest`
-# resource: that resource needs to resolve the target CRD's schema at plan
-# time, and ArgoCD's own `Application` CRD is installed by helm_release.argocd
-# in this SAME apply — on a truly fresh cluster the CRD doesn't exist yet when
-# planning starts, which `depends_on` alone doesn't fix for that resource type.
-# Raw kubectl has no such restriction.
-resource "null_resource" "argocd_root_bootstrap" {
-  triggers = {
-    manifest = yamlencode({
-      apiVersion = "argoproj.io/v1alpha1"
-      kind       = "Application"
-      metadata = {
-        name       = "root"
-        namespace  = "argocd"
-        finalizers = ["resources-finalizer.argocd.argoproj.io"]
-      }
-      spec = {
-        project = "default"
-        source = {
-          repoURL        = "https://github.com/ilaycohen12/snaPDF-gitops.git"
-          targetRevision = "HEAD"
-          path           = var.env_name == "prod" ? "apps/prod" : "apps/dev"
-        }
-        destination = {
-          server    = "https://kubernetes.default.svc"
-          namespace = "argocd"
-        }
-        syncPolicy = {
-          automated = {
-            prune    = true
-            selfHeal = true
+  spec {
+    ingress_class_name = "alb"
+    rule {
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = "ingress-nginx-controller"
+              port {
+                number = 80
+              }
+            }
           }
         }
       }
-    })
+    }
   }
 
-  provisioner "local-exec" {
-    command     = <<-EOT
-      set -e
-      aws eks update-kubeconfig --region ${data.aws_region.current.name} --name ${var.cluster_name}
-      cat <<'MANIFEST' | kubectl apply -f -
-      ${self.triggers.manifest}
-      MANIFEST
-    EOT
-    interpreter = ["bash", "-c"]
-  }
-
-  depends_on = [helm_release.argocd]
+  depends_on = [helm_release.alb_controller, helm_release.nginx]
 }
 
 # ── Wait for the real load balancer hostname before anything reads it ───────
-# aws_route53_record.app/.argocd/.grafana below all read the ALB Controller's
-# real AWS ALB for nginx-alb's Ingress — only created once ArgoCD, bootstrapped
-# above, has actually synced it. Takes real wall-clock minutes, entirely
-# outside a single `terraform apply`'s control — hit this exact race on every
-# from-zero rebuild so far (03/07, and twice more on 04/07/2026 for dev and
-# prod). Polls instead of a blind sleep, same lesson already learned for LB
-# *deletion* in this module's terragrunt.hcl destroy hook (Bug 34).
-# infra #26: used to also wait for argocd-server's own LoadBalancer Service —
-# removed, ArgoCD shares this same ALB now instead of provisioning its own.
+# aws_route53_record.app below reads the ALB Controller's real AWS ALB for
+# nginx-alb's Ingress — only assigned once the ALB Controller has actually
+# provisioned it. Takes real wall-clock minutes, entirely outside a single
+# `terraform apply`'s control — hit this exact race on every from-zero
+# rebuild so far. Polls instead of a blind sleep, same lesson already learned
+# for LB *deletion* in this module's terragrunt.hcl destroy hook (Bug 34).
 resource "null_resource" "wait_for_load_balancers" {
   provisioner "local-exec" {
     command     = <<-EOT
@@ -268,7 +157,7 @@ resource "null_resource" "wait_for_load_balancers" {
     interpreter = ["bash", "-c"]
   }
 
-  depends_on = [null_resource.argocd_root_bootstrap]
+  depends_on = [kubernetes_ingress_v1.nginx_alb]
 }
 
 # ── Nginx Ingress Controller ──────────────────────────────────────────────────
@@ -297,11 +186,13 @@ resource "helm_release" "nginx" {
   }
 }
 
-# ── DNS: point real hostnames at the ALB (in front of Nginx) and ArgoCD's LB ──
-# Reads the actual LB hostname Kubernetes/the ALB Controller already assigned,
-# rather than hardcoding or guessing the AWS-generated name. The app hostnames
-# read from the ALB Ingress's status (not Nginx's Service — it's ClusterIP now,
-# it has no load balancer of its own to read a hostname from).
+# ── DNS: point the app's hostnames at the ALB (in front of Nginx) ───────────
+# A separate read (not just reusing kubernetes_ingress_v1.nginx_alb's own
+# attributes above) because the ALB Controller populates .status.loadBalancer
+# asynchronously, well after Terraform's own create call returns — this data
+# source, evaluated after null_resource.wait_for_load_balancers's poll
+# succeeds, gets the real, populated value; the resource's own attribute
+# wouldn't refresh mid-apply just because something else waited.
 data "kubernetes_ingress_v1" "nginx_alb" {
   metadata {
     name      = "nginx-alb"
@@ -340,27 +231,15 @@ resource "aws_route53_record" "app" {
   }
 }
 
-resource "aws_route53_record" "argocd" {
-  zone_id = var.route53_zone_id
-  name    = "${var.argocd_hostname}.${var.domain_name}"
-  type    = "CNAME"
-  ttl     = 300
-  # infra #26: was data.kubernetes_service.argocd's own LoadBalancer status —
-  # ArgoCD no longer has its own LB, it shares the same ALB as everything else.
-  records = [data.kubernetes_ingress_v1.nginx_alb.status[0].load_balancer[0].ingress[0].hostname]
-}
-
-# KEDA, Karpenter, and the whole Prometheus/Grafana/postgres-exporter stack
-# used to live here — moved out to their own modules (modules/keda,
-# modules/karpenter, modules/observability) so a project that only wants a
-# subset doesn't have to drag in everything. ArgoCD (helm_release + root
-# bootstrap above) stays here deliberately, not split out: this module's own
-# wait_for_load_balancers/aws_route53_record.app below depend on ArgoCD's root
-# Application having already synced the gitops-managed nginx-alb Ingress
-# itself — moving ArgoCD to a separate module would create a real dependency
-# cycle (core needs ArgoCD bootstrapped; a separate ArgoCD module would need
-# core's ALB ready). Discovered this while doing the split, not a design
-# choice made in advance.
+# KEDA, Karpenter, the whole Prometheus/Grafana/postgres-exporter stack, and
+# ArgoCD itself (helm_release + root bootstrap + webhook secret + its own DNS
+# record) all used to live here — moved out to their own modules
+# (modules/keda, modules/karpenter, modules/observability, modules/argocd) so
+# a project that only wants a subset doesn't have to drag in everything.
+# ArgoCD couldn't be split out until nginx-alb became a Terraform resource
+# (above) instead of gitops-applied content — this module's own
+# wait_for_load_balancers/aws_route53_record.app used to depend on ArgoCD's
+# root Application having already synced it, a real cycle that's gone now.
 
 # ── DB credentials — read here too (duplicated from modules/observability's
 # own copy) purely for the staging-database job below, which stayed in this
