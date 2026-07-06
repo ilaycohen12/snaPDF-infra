@@ -32,3 +32,8 @@ output "acm_certificate_arn" {
   description = "Validated wildcard cert ARN for *.snapdf.bond — paste into each Ingress's alb.ingress.kubernetes.io/certificate-arn annotation in snaPDF-gitops (not wired automatically since Ingress YAML lives outside Terraform)"
   value       = aws_acm_certificate_validation.main.certificate_arn
 }
+
+output "dev_wildcard_certificate_arn" {
+  description = "Validated wildcard cert ARN for *.dev.snapdf.bond (infra #28 experiment) — added to the ALB listener alongside acm_certificate_arn, not instead of it"
+  value       = aws_acm_certificate_validation.dev_wildcard.certificate_arn
+}

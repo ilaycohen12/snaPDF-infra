@@ -58,5 +58,5 @@ inputs = {
   ebs_csi_role_arn                   = dependency.iam.outputs.ebs_csi_role_arn
   route53_zone_id                    = dependency.global.outputs.route53_zone_id
   domain_name                        = "snapdf.bond"
-  grafana_hostname                   = "grafana-dev"
+  grafana_hostname                   = "grafana.dev"
 }

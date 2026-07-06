@@ -195,3 +195,47 @@ resource "aws_acm_certificate_validation" "main" {
   certificate_arn         = aws_acm_certificate.main.arn
   validation_record_fqdns = [for record in aws_route53_record.acm_validation : record.fqdn]
 }
+
+# ── ACM Certificate for the dev wildcard subdomain (infra #28 experiment) ────
+# *.snapdf.bond (above) only matches one label deep — it covers
+# grafana-dev.snapdf.bond today but would NOT cover the nested form
+# grafana.dev.snapdf.bond. A deliberately separate cert (not a new SAN added
+# to aws_acm_certificate.main) so the existing, widely-used cert is never
+# replaced/revalidated by this change — nginx_alb's ALB Ingress annotation
+# gets this ARN added alongside the existing one (comma-separated, both
+# attached to the shared listener via SNI), never swapped for it.
+resource "aws_acm_certificate" "dev_wildcard" {
+  domain_name               = "dev.snapdf.bond"
+  subject_alternative_names = ["*.dev.snapdf.bond"]
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Project   = "snapdf"
+    ManagedBy = "terragrunt"
+  }
+}
+
+resource "aws_route53_record" "dev_wildcard_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.dev_wildcard.domain_validation_options : dvo.resource_record_name => {
+      name  = dvo.resource_record_name
+      type  = dvo.resource_record_type
+      value = dvo.resource_record_value
+    }...
+  }
+
+  zone_id = aws_route53_zone.main.zone_id
+  name    = each.value[0].name
+  type    = each.value[0].type
+  ttl     = 60
+  records = [each.value[0].value]
+}
+
+resource "aws_acm_certificate_validation" "dev_wildcard" {
+  certificate_arn         = aws_acm_certificate.dev_wildcard.arn
+  validation_record_fqdns = [for record in aws_route53_record.dev_wildcard_validation : record.fqdn]
+}

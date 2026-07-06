@@ -47,5 +47,5 @@ inputs = {
   cluster_certificate_authority_data = dependency.eks.outputs.cluster_certificate_authority_data
   route53_zone_id                    = dependency.global.outputs.route53_zone_id
   domain_name                        = "snapdf.bond"
-  argocd_hostname                    = "argocd-dev"
+  argocd_hostname                    = "argocd.dev"
 }

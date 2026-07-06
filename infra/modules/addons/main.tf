@@ -101,7 +101,13 @@ resource "kubernetes_ingress_v1" "nginx_alb" {
     annotations = {
       "alb.ingress.kubernetes.io/scheme"          = "internet-facing"
       "alb.ingress.kubernetes.io/target-type"     = "ip"
-      "alb.ingress.kubernetes.io/certificate-arn" = var.acm_certificate_arn
+      # A comma-separated list attaches multiple certs to the same shared ALB
+      # listener via SNI — additive, not a replacement. var.acm_certificate_arn
+      # (the original *.snapdf.bond cert covering the app/dev/staging hosts)
+      # always comes first; anything in var.additional_certificate_arns (e.g.
+      # the *.dev.snapdf.bond cert for infra #28's nested-wildcard experiment)
+      # is appended, never substituted in its place.
+      "alb.ingress.kubernetes.io/certificate-arn" = join(",", concat([var.acm_certificate_arn], var.additional_certificate_arns))
       "alb.ingress.kubernetes.io/listen-ports"    = jsonencode([{ HTTP = 80 }, { HTTPS = 443 }])
       "alb.ingress.kubernetes.io/ssl-redirect"    = "443"
     }
@@ -229,6 +235,23 @@ resource "aws_route53_record" "app" {
       evaluate_target_health = true
     }
   }
+}
+
+# ── Wildcard DNS per environment (infra #28 experiment, dev only for now) ───
+# One record like *.dev.snapdf.bond replaces a growing list of one-off
+# per-service CNAMEs (grafana-dev, argocd-dev, ...) — any future subdomain
+# under this label resolves automatically, no new Terraform resource needed.
+# Not the zone apex, so (unlike aws_route53_record.app above) this can be a
+# plain CNAME — the apex-only ALIAS requirement doesn't apply to a subdomain
+# like dev.snapdf.bond.
+resource "aws_route53_record" "wildcard" {
+  for_each = toset(var.wildcard_hostnames)
+
+  zone_id = var.route53_zone_id
+  name    = "*.${each.value}.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 300
+  records = [data.kubernetes_ingress_v1.nginx_alb.status[0].load_balancer[0].ingress[0].hostname]
 }
 
 # KEDA, Karpenter, the whole Prometheus/Grafana/postgres-exporter stack, and

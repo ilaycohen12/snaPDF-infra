@@ -53,6 +53,18 @@ variable "acm_certificate_arn" {
   type        = string
 }
 
+variable "additional_certificate_arns" {
+  description = "Extra cert ARNs to attach to the shared ALB listener alongside acm_certificate_arn (comma-separated on the same annotation, additive via SNI) — e.g. the *.dev.snapdf.bond cert for infra #28's nested-wildcard experiment. Empty by default; prod doesn't set this."
+  type        = list(string)
+  default     = []
+}
+
+variable "wildcard_hostnames" {
+  description = "Subdomain labels to create a *.{label}.domain_name wildcard CNAME for (e.g. [\"dev\"] creates *.dev.snapdf.bond) — infra #28 experiment, replaces one-off per-service records like grafana-dev/argocd-dev. Empty by default."
+  type        = list(string)
+  default     = []
+}
+
 variable "rds_resource_id" {
   description = "RDS instance's AWS-internal resource_id (not its identifier — this changes on every real instance recreate). Used to key the one-off staging-database job so it only re-runs when the instance is genuinely new. Empty string on environments with no staging database (e.g. prod)."
   type        = string
