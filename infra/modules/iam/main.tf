@@ -278,8 +278,19 @@ resource "aws_iam_role_policy_attachment" "ebs_csi" {
 }
 
 # ── PDF Worker ────────────────────────────────────────────────────────────────
-# Both signed and free workers share one IAM role — same permissions, different queue URLs via env vars
-
+# Both signed and free workers share one IAM role — same permissions, different queue URLs via env vars.
+#
+# Least-privilege split (was: this one role also covered api/auth — see git history
+# for the removed StringLike entries and the wider policy that used to live here).
+# That happened as Bug 19's fix: pre-microservice-split there was one shared service
+# account, and when the split introduced separate api-*-sa/auth-*-sa/*-worker-*
+# accounts, the fastest fix under a live AccessDenied outage was widening this one
+# role's trust policy rather than cutting three properly-scoped roles. Verified
+# directly against api/app.py, auth/main.py, and worker/worker.py's actual boto3
+# calls (not guessed): auth makes zero AWS calls (no role at all, below); api only
+# ever sends to SQS and needs S3 read (for presigned URLs) + write (upload) — never
+# receives/deletes; worker is the only one that receives/deletes from SQS, and
+# never sends. This role now only grants what worker itself actually calls.
 resource "aws_iam_role" "worker" {
   name = "${var.cluster_name}-worker"
 
@@ -293,20 +304,11 @@ resource "aws_iam_role" "worker" {
         StringEquals = {
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
         }
-        # Wildcard covers both worker deployments (free-worker-*, signed-worker-*) in every
-        # namespace this cluster hosts. api/auth service accounts are listed explicitly since
-        # they don't match the *-worker-* pattern but share this same role (Bug 19 fix).
         # Generated per-namespace via var.app_namespaces so this works identically for the dev
         # cluster (dev + staging) and the prod cluster (production) instead of hardcoding
         # dev/staging regardless of which cluster applies this module (Bug 30 fix).
         StringLike = {
-          "${local.oidc_url}:sub" = flatten([
-            for ns in var.app_namespaces : [
-              "system:serviceaccount:${ns}:*-worker-*",
-              "system:serviceaccount:${ns}:auth-${ns}-sa",
-              "system:serviceaccount:${ns}:api-${ns}-sa"
-            ]
-          ])
+          "${local.oidc_url}:sub" = [for ns in var.app_namespaces : "system:serviceaccount:${ns}:*-worker-*"]
         }
       }
     }]
@@ -324,18 +326,16 @@ resource "aws_iam_policy" "worker" {
       {
         Effect = "Allow"
         Action = [
-          "sqs:SendMessage",       # send a job message to the queue (API)
-          "sqs:ReceiveMessage",    # pick up a message from the queue (worker)
-          "sqs:DeleteMessage",     # delete it after processing (worker)
-          "sqs:GetQueueAttributes" # read queue metadata
+          "sqs:ReceiveMessage", # pick up a message from the queue
+          "sqs:DeleteMessage"   # delete it after processing
         ]
         Resource = concat(var.signed_queue_arns, var.free_queue_arns) # every signed+free queue this cluster's namespaces use
       },
       {
         Effect = "Allow"
         Action = [
-          "s3:PutObject", # upload the generated PDF
-          "s3:GetObject"  # needed to generate presigned download URLs
+          "s3:GetObject", # download the uploaded input file
+          "s3:PutObject"  # upload the generated PDF
         ]
         Resource = [for arn in var.bucket_arns : "${arn}/*"] # all objects inside every PDF bucket this cluster's namespaces use
       }
@@ -347,6 +347,69 @@ resource "aws_iam_role_policy_attachment" "worker" {
   policy_arn = aws_iam_policy.worker.arn
   role       = aws_iam_role.worker.name
 }
+
+# ── API ───────────────────────────────────────────────────────────────────────
+# Split out from the shared worker role (see comment above) — api only ever sends
+# a job onto the queue and needs S3 read/write (upload the input file, and
+# s3:GetObject so the presigned download URLs it generates are actually valid
+# when fetched). Never receives or deletes from SQS.
+resource "aws_iam_role" "api" {
+  name = "${var.cluster_name}-api"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = var.oidc_provider_arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_url}:aud" = "sts.amazonaws.com"
+        }
+        StringLike = {
+          "${local.oidc_url}:sub" = [for ns in var.app_namespaces : "system:serviceaccount:${ns}:api-${ns}-sa"]
+        }
+      }
+    }]
+  })
+
+  tags = { Environment = var.env_name, ManagedBy = "terragrunt" }
+}
+
+resource "aws_iam_policy" "api" {
+  name = "${var.cluster_name}-api"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"] # enqueue a job — never receives or deletes
+        Resource = concat(var.signed_queue_arns, var.free_queue_arns)
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject", # upload the user's input file
+          "s3:GetObject"  # required for its own presigned GET URLs to be valid when fetched
+        ]
+        Resource = [for arn in var.bucket_arns : "${arn}/*"]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "api" {
+  policy_arn = aws_iam_policy.api.arn
+  role       = aws_iam_role.api.name
+}
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+# Deliberately no IAM role at all — auth/main.py makes zero boto3 calls (confirmed
+# by reading the source, not assumed). It used to ride on the shared worker role
+# purely as a side effect of Bug 19's fix, carrying SQS/S3 permissions it never
+# once exercised. Its gitops values.yaml no longer sets serviceAccount.roleArn,
+# so it gets a plain ServiceAccount with no AWS credentials whatsoever.
 
 # ── Karpenter ─────────────────────────────────────────────────────────────────
 # Two roles: one for the Karpenter controller pod (IRSA, calls the EC2 API to

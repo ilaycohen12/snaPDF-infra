@@ -18,6 +18,11 @@ output "worker_role_arn" {
   value       = aws_iam_role.worker.arn
 }
 
+output "api_role_arn" {
+  description = "IAM role ARN for the api service — annotated onto the api service account. Split out from worker_role_arn for least-privilege (api only sends to SQS + S3 read/write, never receives/deletes)"
+  value       = aws_iam_role.api.arn
+}
+
 output "karpenter_controller_role_arn" {
   description = "IAM role ARN for the Karpenter controller — annotated onto its service account"
   value       = aws_iam_role.karpenter_controller.arn
