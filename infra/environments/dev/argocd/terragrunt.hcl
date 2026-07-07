@@ -46,4 +46,6 @@ inputs = {
   domain_name                        = "snapdf.bond"
   argocd_hostname                    = "argocd.dev"
   github_pat_secret_arn              = dependency.global.outputs.github_pat_secret_arn
+  github_oauth_client_id             = "Ov23li55n7xJZR6ED5Uz"
+  sso_github_username                = "ilaycohen12"
 }

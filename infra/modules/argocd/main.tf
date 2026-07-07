@@ -60,6 +60,27 @@ resource "aws_secretsmanager_secret_version" "argocd_webhook" {
   secret_string = random_password.argocd_webhook.result
 }
 
+# ── GitHub OAuth for ArgoCD SSO (via Dex), stored for durability ────────────
+resource "aws_secretsmanager_secret" "github_oauth" {
+  name                    = var.env_name == "prod" ? "snapdf-prod/argocd-github-oauth" : "snapdf/argocd-github-oauth"
+  description             = "GitHub OAuth App credentials (Dex connector) for ArgoCD SSO on the ${var.env_name} cluster"
+  recovery_window_in_days = 0
+
+  tags = { Environment = var.env_name, ManagedBy = "terragrunt" }
+}
+
+resource "aws_secretsmanager_secret_version" "github_oauth" {
+  secret_id = aws_secretsmanager_secret.github_oauth.id
+  secret_string = jsonencode({
+    client_id     = var.github_oauth_client_id
+    client_secret = var.github_oauth_client_secret
+  })
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
+
 # ── GitHub webhook, kept in sync with the secret above ───────────────────────
 resource "github_repository_webhook" "argocd" {
   repository = "snaPDF-gitops"
@@ -111,6 +132,49 @@ resource "helm_release" "argocd" {
   set_sensitive {
     name  = "configs.secret.githubSecret"
     value = random_password.argocd_webhook.result
+  }
+
+  # ── SSO: GitHub login via Dex, restricted by RBAC ──────────────────────────
+  set {
+    name  = "configs.cm.url"
+    value = "https://${var.argocd_hostname}.${var.domain_name}"
+  }
+
+  set {
+    name  = "dex.enabled"
+    value = "true"
+  }
+
+  set {
+    name = "configs.cm.dex\\.config"
+    value = yamlencode({
+      connectors = [{
+        type = "github"
+        id   = "github"
+        name = "GitHub"
+        config = {
+          clientID     = var.github_oauth_client_id
+          clientSecret = "$dex.github.clientSecret"
+          orgs         = []
+          useLoginAsID = true
+        }
+      }]
+    })
+  }
+
+  set_sensitive {
+    name  = "configs.secret.extra.dex\\.github\\.clientSecret"
+    value = var.github_oauth_client_secret
+  }
+
+  set {
+    name  = "configs.rbac.policy\\.default"
+    value = ""
+  }
+
+  set {
+    name  = "configs.rbac.policy\\.csv"
+    value = "g\\, ${var.sso_github_username}\\, role:admin"
   }
 }
 

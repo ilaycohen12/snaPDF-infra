@@ -55,4 +55,6 @@ inputs = {
   route53_zone_id                    = dependency.global.outputs.route53_zone_id
   domain_name                        = "snapdf.bond"
   grafana_hostname                   = "grafana-prod"
+  grafana_oauth_client_id            = "Ov23lit5QCf7vRcTDE4r"
+  sso_github_username                = "ilaycohen12"
 }

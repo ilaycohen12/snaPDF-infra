@@ -37,3 +37,19 @@ variable "grafana_hostname" {
   description = "Subdomain label for this environment's Grafana UI. Dev uses the wildcard-DNS form \"grafana.dev\" (dot); prod still uses the flat \"grafana-prod\" form."
   type        = string
 }
+
+variable "grafana_oauth_client_id" {
+  description = "GitHub OAuth App client ID for Grafana's GitHub login (not secret — client IDs are public identifiers)"
+  type        = string
+}
+
+variable "grafana_oauth_client_secret" {
+  description = "GitHub OAuth App client secret for Grafana's GitHub login — supplied via TF_VAR_grafana_oauth_client_secret at apply time, never committed"
+  type        = string
+  sensitive   = true
+}
+
+variable "sso_github_username" {
+  description = "The only GitHub login allowed into Grafana. Enforced via role_attribute_path + role_attribute_strict (evaluated fresh on every login) rather than a pre-provisioned Grafana user, since this Grafana has no persistence and its internal user database doesn't survive a pod restart."
+  type        = string
+}

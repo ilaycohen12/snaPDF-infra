@@ -76,6 +76,43 @@ resource "aws_secretsmanager_secret_version" "grafana_admin" {
   secret_string = random_password.grafana_admin.result
 }
 
+# ── GitHub OAuth for Grafana SSO, stored for durability ─────────────────────
+resource "aws_secretsmanager_secret" "grafana_oauth" {
+  name                    = var.env_name == "prod" ? "snapdf-prod/grafana-github-oauth" : "snapdf/grafana-github-oauth"
+  description             = "GitHub OAuth App credentials for Grafana SSO on the ${var.env_name} cluster"
+  recovery_window_in_days = 0
+
+  tags = { Environment = var.env_name, ManagedBy = "terragrunt" }
+}
+
+resource "aws_secretsmanager_secret_version" "grafana_oauth" {
+  secret_id = aws_secretsmanager_secret.grafana_oauth.id
+  secret_string = jsonencode({
+    client_id     = var.grafana_oauth_client_id
+    client_secret = var.grafana_oauth_client_secret
+  })
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
+
+# Grafana's chart refuses a raw client_secret in values/grafana.ini (it'd sit
+# in plaintext in the ConfigMap) — so the real value lives in this K8s Secret
+# instead, and grafana.ini references it via $__env{} expansion.
+resource "kubernetes_secret" "grafana_github_oauth" {
+  metadata {
+    name      = "grafana-github-oauth"
+    namespace = "monitoring"
+  }
+
+  data = {
+    client-secret = var.grafana_oauth_client_secret
+  }
+
+  depends_on = [helm_release.kube_prometheus_stack]
+}
+
 resource "helm_release" "kube_prometheus_stack" {
   name             = "kube-prometheus-stack"
   repository       = "https://prometheus-community.github.io/helm-charts"
@@ -129,6 +166,62 @@ resource "helm_release" "kube_prometheus_stack" {
   set {
     name  = "grafana.resources.requests.memory"
     value = "128Mi"
+  }
+
+  # ── SSO: GitHub login, restricted to one account via role_attribute_path ──
+  set {
+    name  = "grafana.grafana\\.ini.server.domain"
+    value = "${var.grafana_hostname}.${var.domain_name}"
+  }
+
+  set {
+    name  = "grafana.grafana\\.ini.server.root_url"
+    value = "https://${var.grafana_hostname}.${var.domain_name}/"
+  }
+
+  set {
+    name  = "grafana.grafana\\.ini.auth\\.github.enabled"
+    value = "true"
+  }
+
+  set {
+    name  = "grafana.grafana\\.ini.auth\\.github.allow_sign_up"
+    value = "true"
+  }
+
+  set {
+    name  = "grafana.grafana\\.ini.auth\\.github.client_id"
+    value = var.grafana_oauth_client_id
+  }
+
+  set {
+    name  = "grafana.grafana\\.ini.auth\\.github.client_secret"
+    value = "$__env{GF_AUTH_GITHUB_CLIENT_SECRET}"
+  }
+
+  set {
+    name  = "grafana.envValueFrom.GF_AUTH_GITHUB_CLIENT_SECRET.secretKeyRef.name"
+    value = "grafana-github-oauth"
+  }
+
+  set {
+    name  = "grafana.envValueFrom.GF_AUTH_GITHUB_CLIENT_SECRET.secretKeyRef.key"
+    value = "client-secret"
+  }
+
+  set {
+    name  = "grafana.grafana\\.ini.auth\\.github.scopes"
+    value = "user:email\\,read:org"
+  }
+
+  set {
+    name  = "grafana.grafana\\.ini.auth\\.github.role_attribute_path"
+    value = "login=='${var.sso_github_username}' && 'Admin' || 'None'"
+  }
+
+  set {
+    name  = "grafana.grafana\\.ini.auth\\.github.role_attribute_strict"
+    value = "true"
   }
 }
 
