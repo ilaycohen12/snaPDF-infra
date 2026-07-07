@@ -3,9 +3,12 @@
 
 # Terraform auto-generated files
 .terraform/
-.terraform.lock.hcl
 terraform.tfstate
 terraform.tfstate.backup
+
+# .terraform.lock.hcl is intentionally NOT ignored — it pins exact provider
+# versions + checksums per environment and must be committed for anyone
+# (including a fresh clone) to get reproducible results
 
 # Files Terragrunt generates inside each module before running
 backend.tf
