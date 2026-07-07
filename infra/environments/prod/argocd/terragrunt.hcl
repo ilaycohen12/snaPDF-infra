@@ -30,7 +30,8 @@ dependency "global" {
   config_path = "../../../global"
 
   mock_outputs = {
-    route53_zone_id = "Z0000000000000000000"
+    route53_zone_id       = "Z0000000000000000000"
+    github_pat_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:snapdf/github-pat-mock"
   }
 
   mock_outputs_allowed_terraform_commands = ["validate", "plan"]
@@ -44,4 +45,5 @@ inputs = {
   route53_zone_id                    = dependency.global.outputs.route53_zone_id
   domain_name                        = "snapdf.bond"
   argocd_hostname                    = "argocd-prod"
+  github_pat_secret_arn              = dependency.global.outputs.github_pat_secret_arn
 }

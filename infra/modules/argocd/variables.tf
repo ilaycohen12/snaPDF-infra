@@ -32,3 +32,8 @@ variable "argocd_hostname" {
   description = "Subdomain label for this environment's ArgoCD UI, e.g. \"argocd-dev\" or \"argocd-prod\""
   type        = string
 }
+
+variable "github_pat_secret_arn" {
+  description = "ARN of the GitHub PAT secret (from the global module) — used to authenticate the github provider that manages this repo's ArgoCD webhook"
+  type        = string
+}

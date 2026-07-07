@@ -24,6 +24,16 @@ provider "kubernetes" {
   }
 }
 
+# ── GitHub Provider ───────────────────────────────────────────────────────────
+data "aws_secretsmanager_secret_version" "github_pat" {
+  secret_id = var.github_pat_secret_arn
+}
+
+provider "github" {
+  token = data.aws_secretsmanager_secret_version.github_pat.secret_string
+  owner = "ilaycohen12"
+}
+
 data "kubernetes_ingress_v1" "nginx_alb" {
   metadata {
     name      = "nginx-alb"
@@ -48,6 +58,20 @@ resource "aws_secretsmanager_secret" "argocd_webhook" {
 resource "aws_secretsmanager_secret_version" "argocd_webhook" {
   secret_id     = aws_secretsmanager_secret.argocd_webhook.id
   secret_string = random_password.argocd_webhook.result
+}
+
+# ── GitHub webhook, kept in sync with the secret above ───────────────────────
+resource "github_repository_webhook" "argocd" {
+  repository = "snaPDF-gitops"
+
+  configuration {
+    url          = "https://${var.argocd_hostname}.${var.domain_name}/api/webhook"
+    content_type = "json"
+    insecure_ssl = true
+    secret       = random_password.argocd_webhook.result
+  }
+
+  events = ["push"]
 }
 
 resource "helm_release" "argocd" {

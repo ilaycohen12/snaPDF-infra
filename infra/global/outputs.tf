@@ -37,3 +37,8 @@ output "dev_wildcard_certificate_arn" {
   description = "Validated wildcard cert ARN for *.dev.snapdf.bond (infra #28 experiment) — added to the ALB listener alongside acm_certificate_arn, not instead of it"
   value       = aws_acm_certificate_validation.dev_wildcard.certificate_arn
 }
+
+output "github_pat_secret_arn" {
+  description = "ARN of the GitHub PAT secret — read by the argocd module's github provider to authenticate webhook management"
+  value       = aws_secretsmanager_secret.github_pat.arn
+}

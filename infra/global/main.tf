@@ -195,3 +195,21 @@ resource "aws_acm_certificate_validation" "dev_wildcard" {
   certificate_arn         = aws_acm_certificate.dev_wildcard.arn
   validation_record_fqdns = [for record in aws_route53_record.dev_wildcard_validation : record.fqdn]
 }
+
+# ── GitHub PAT for the ArgoCD webhook resource ───────────────────────────────
+resource "aws_secretsmanager_secret" "github_pat" {
+  name                    = "snapdf/github-pat"
+  description             = "GitHub PAT the argocd module uses to keep this repo's ArgoCD webhook secret in sync"
+  recovery_window_in_days = 0
+
+  tags = { Project = "snapdf", ManagedBy = "terragrunt" }
+}
+
+resource "aws_secretsmanager_secret_version" "github_pat" {
+  secret_id     = aws_secretsmanager_secret.github_pat.id
+  secret_string = var.github_pat
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
