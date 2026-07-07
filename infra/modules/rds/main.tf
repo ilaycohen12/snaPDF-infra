@@ -1,22 +1,21 @@
 # ── Security Group ───────────────────────────────────────────────────────────
-# Controls who can connect to RDS — only EKS worker nodes on port 5432
 resource "aws_security_group" "rds" {
-  name   = "${var.cluster_name}-rds-sg"  # e.g. "snapdf-dev-rds-sg"
-  vpc_id = var.vpc_id                     # must belong to a specific VPC
+  name   = "${var.cluster_name}-rds-sg"
+  vpc_id = var.vpc_id
 
   ingress {
     description     = "PostgreSQL from EKS nodes only"
-    from_port       = 5432                          # PostgreSQL port
+    from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [var.node_security_group_id]  # only allow traffic from EKS worker nodes
+    security_groups = [var.node_security_group_id]
   }
 
   egress {
-    from_port   = 0             # all ports
+    from_port   = 0
     to_port     = 0
-    protocol    = "-1"          # all protocols
-    cidr_blocks = ["0.0.0.0/0"] # RDS can send responses back out
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
@@ -28,25 +27,25 @@ resource "aws_security_group" "rds" {
 
 # ── RDS Instance ─────────────────────────────────────────────────────────────
 resource "aws_db_instance" "main" {
-  identifier        = "${var.cluster_name}-rds"  # name shown in AWS console e.g. "snapdf-dev-rds"
-  engine            = "postgres"                  # PostgreSQL engine
-  engine_version    = "16"                        # latest stable PostgreSQL version
-  instance_class    = "db.t3.micro"              # cheapest instance — ~$15/month, destroy when not working
-  allocated_storage = 20                          # 20 GB disk — minimum allowed by AWS
+  identifier        = "${var.cluster_name}-rds"
+  engine            = "postgres"
+  engine_version    = "16"
+  instance_class    = "db.t3.micro"
+  allocated_storage = 20
 
-  db_name  = var.db_name      # database name inside PostgreSQL e.g. "snapdf"
-  username = var.db_username  # master username e.g. "dbadmin"
+  db_name  = var.db_name
+  username = var.db_username
 
-  manage_master_user_password = true  # AWS generates password + stores it in Secrets Manager automatically
+  manage_master_user_password = true
 
-  db_subnet_group_name   = var.database_subnet_group_name  # which subnets to deploy into — from vpc module
-  vpc_security_group_ids = [aws_security_group.rds.id]     # attach the security group above
+  db_subnet_group_name   = var.database_subnet_group_name
+  vpc_security_group_ids = [aws_security_group.rds.id]
 
-  multi_az               = false  # single AZ — saves cost, fine for interview project
-  publicly_accessible    = false  # never reachable from the internet
-  skip_final_snapshot    = true   # allows terraform destroy without requiring a backup snapshot first
-  deletion_protection    = false  # allows terraform destroy
-  backup_retention_period = 0     # no automated backups — saves cost
+  multi_az                = false
+  publicly_accessible     = false
+  skip_final_snapshot     = true
+  deletion_protection     = false
+  backup_retention_period = 0
 
   tags = {
     Environment = var.env_name
@@ -56,16 +55,6 @@ resource "aws_db_instance" "main" {
 }
 
 # ── Keep the app-facing secret in sync with the real master password ────────
-# manage_master_user_password generates a brand-new random password every time
-# this instance is created (even a same-config recreate) and stores it in its
-# own hidden, AWS-managed secret. ESO/postgres_exporter don't read that one
-# directly though — they read a separate "consolidated" secret (bundling
-# host+username+password) that was originally created by hand and, until now,
-# had to be manually rebuilt after every RDS recreate (Bug 29 on 02/07/2026,
-# recurred on both dev and prod during the 04/07/2026 full-VPC rebuild).
-# This only ever writes a new *version* onto the existing secret (read via
-# `data`, never created/imported here) — so it works with the secret exactly
-# as it's always existed, no state-ownership migration needed.
 data "aws_secretsmanager_secret_version" "master" {
   secret_id = aws_db_instance.main.master_user_secret[0].secret_arn
 }

@@ -10,10 +10,6 @@ terraform {
   source = "../../../modules/argocd"
 }
 
-# Needs addons's alb_controller + nginx + nginx-alb Ingress ready before
-# ArgoCD's own Ingress/DNS record mean anything. No addons output is actually
-# consumed (this module reads the shared Ingress live, same object, via its
-# own data source) — this is pure ordering.
 dependencies {
   paths = ["../addons"]
 }

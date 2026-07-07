@@ -10,10 +10,6 @@ terraform {
   source = "../../../modules/observability"
 }
 
-# Pure ordering — this module doesn't consume any addons output (it reads the
-# ALB Ingress's live status directly, same object addons already waited for),
-# but must not apply before addons's alb_controller/nginx/wait_for_load_balancers
-# have actually finished.
 dependencies {
   paths = ["../addons"]
 }

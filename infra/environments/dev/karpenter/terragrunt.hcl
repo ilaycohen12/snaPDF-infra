@@ -10,7 +10,6 @@ terraform {
   source = "../../../modules/karpenter"
 }
 
-# Pure ordering — needs alb_controller (addons) ready before Karpenter installs.
 dependencies {
   paths = ["../addons"]
 }

@@ -1,18 +1,16 @@
 locals {
-  env = read_terragrunt_config(find_in_parent_folders("env.hcl")) # reads prod/env.hcl
+  env = read_terragrunt_config(find_in_parent_folders("env.hcl"))
 }
 
 include "root" {
-  path = find_in_parent_folders() # inherits S3 backend + provider from infra/terragrunt.hcl
+  path = find_in_parent_folders()
 }
 
 terraform {
-  source = "../../../modules/s3" # points to infra/modules/s3
+  source = "../../../modules/s3"
 }
 
 inputs = {
-  env_name = local.env.locals.env_name # "prod"
-  # "prod" here, not "production" — matches the existing bucket name
-  # (snapdf-prod-pdfs-...) already live in AWS. Same reasoning as sqs/terragrunt.hcl.
+  env_name       = local.env.locals.env_name
   app_namespaces = ["prod"]
 }

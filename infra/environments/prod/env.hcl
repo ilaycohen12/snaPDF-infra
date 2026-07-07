@@ -4,7 +4,7 @@
 # ============================================================
 
 locals {
-  env_name           = "prod"              # environment label — used in resource names and tags
-  cluster_name       = "snapdf-prod"  # EKS cluster name as it will appear in AWS
-  node_instance_type = "t3.medium"        # EC2 instance type for worker nodes
+  env_name           = "prod"
+  cluster_name       = "snapdf-prod"
+  node_instance_type = "t3.medium"
 }

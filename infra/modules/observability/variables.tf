@@ -34,6 +34,6 @@ variable "domain_name" {
 }
 
 variable "grafana_hostname" {
-  description = "Subdomain label for this environment's Grafana UI, e.g. \"grafana-dev\" or \"grafana-prod\""
+  description = "Subdomain label for this environment's Grafana UI. Dev uses the wildcard-DNS form \"grafana.dev\" (dot); prod still uses the flat \"grafana-prod\" form."
   type        = string
 }

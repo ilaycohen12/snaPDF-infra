@@ -1,11 +1,9 @@
 # snaPDF - Safe Destroy Script
-# Pre-cleans AWS resources Terraform cannot manage, then destroys infra
-# Uses --lock=false to prevent stuck state locks on DNS failure
 
 param(
     [ValidateSet("dev", "prod")]
-    [string]$Environment = "dev",  # which environment to destroy
-    [switch]$SkipK8s  # pass -SkipK8s if cluster is already gone
+    [string]$Environment = "dev",
+    [switch]$SkipK8s
 )
 
 $REGION = "us-east-1"
@@ -17,12 +15,6 @@ if (-not $SkipK8s) {
     Write-Host "`n=== Step 1: Delete all Ingresses and LoadBalancer Services (all namespaces) ===" -ForegroundColor Cyan
     aws eks update-kubeconfig --region $REGION --name $CLUSTER 2>$null
     if ($LASTEXITCODE -eq 0) {
-        # Generic, not per-namespace: catches anything that creates an AWS load
-        # balancer (the ALB Ingress in ingress-nginx, ArgoCD's LoadBalancer Service,
-        # etc.) regardless of which namespace it lives in - a hardcoded per-namespace
-        # list silently misses new LB-creating objects added later (found live:
-        # missed the ingress-nginx namespace entirely, home of the ALB Ingress added
-        # in infra #18, until this fix).
         kubectl delete ingress --all --all-namespaces 2>$null
         kubectl get svc --all-namespaces -o json 2>$null |
             ConvertFrom-Json |

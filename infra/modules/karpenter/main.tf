@@ -14,12 +14,6 @@ provider "helm" {
 }
 
 # ── Fargate profile for Karpenter's own controller ──────────────────────────
-# Deliberately its own namespace ("karpenter", not kube-system) — a Fargate
-# profile matches by namespace, and kube-system also holds CoreDNS/kube-proxy/
-# the VPC CNI, none of which can run on Fargate (kube-proxy needs host
-# networking; the others are DaemonSets, which Fargate doesn't support at
-# all). Scoping the profile to a namespace nothing else uses means it can
-# never accidentally claim a pod that would just fail to schedule.
 resource "aws_iam_role" "fargate_execution" {
   name = "${var.cluster_name}-karpenter-fargate-execution"
 
@@ -52,10 +46,6 @@ resource "aws_eks_fargate_profile" "karpenter" {
 }
 
 # ── Karpenter ─────────────────────────────────────────────────────────────────
-# Runs on Fargate (the profile above), not the static managed node group or a
-# node it manages itself — avoids the bootstrapping problem where Karpenter's
-# controller would need to already be running to decide whether to evict the
-# very node it's sitting on.
 resource "helm_release" "karpenter" {
   name             = "karpenter"
   repository       = "oci://public.ecr.aws/karpenter"
@@ -63,7 +53,7 @@ resource "helm_release" "karpenter" {
   namespace        = "karpenter"
   create_namespace = true
   version          = "1.1.1"
-  wait             = true # must be genuinely ready before we trust it to manage capacity
+  wait             = true
   timeout          = 300
   depends_on       = [aws_eks_fargate_profile.karpenter]
 
@@ -82,28 +72,11 @@ resource "helm_release" "karpenter" {
     value = var.karpenter_controller_role_arn
   }
 
-  # infra #24: the chart defaults to 2 replicas with a hard pod anti-affinity
-  # (no two replicas on the same node) and a zone-spread topology constraint —
-  # fine when the managed node group had 2+ nodes, but deadlocks now that it's
-  # shrunk to a single fixed baseline node: Karpenter's own 2nd replica can
-  # never find a second permanent node to land on, so it sits Pending forever
-  # (confirmed live: "didn't match pod topology spread constraints"). Karpenter
-  # doesn't need HA at this project's scale — losing it briefly only pauses new
-  # scheduling decisions, it doesn't affect already-running pods/nodes.
   set {
     name  = "replicas"
     value = "1"
   }
 
-  # The chart's own default is `resources: {}` — harmless on a real EC2 node
-  # (just uses whatever's free), but fatal on Fargate: Fargate sizes the
-  # microVM off the pod's own resource requests, so with none set it gets
-  # sized far too small to run the controller at all. Confirmed live: with no
-  # requests, the controller crash-looped (Exit Code 1) with zero log output
-  # ever flushed, and its own health endpoint timed out/reset under kubelet's
-  # probes. 1 vCPU / 1Gi is enough for this project's node counts; limits
-  # match requests since Fargate can't burst a pod past its sized capacity
-  # anyway.
   set {
     name  = "controller.resources.requests.cpu"
     value = "1"
@@ -120,14 +93,7 @@ resource "helm_release" "karpenter" {
   }
 }
 
-# EKS requires an IAM role to be explicitly authorized before an EC2 instance
-# using it can register as a node — the managed node group's role gets this
-# automatically, but Karpenter's separately-created node role does not. Without
-# this, Karpenter-provisioned instances boot fine at the EC2/OS level but never
-# actually join the cluster (found live: NodeClaim stuck on "Node not registered
-# with cluster" indefinitely). Lives here, not in the eks or iam module, because
-# eks can't depend on iam's node role output without creating a circular
-# dependency (iam already depends on eks for the OIDC provider).
+# ── EKS access entry for Karpenter-provisioned nodes ────────────────────────
 resource "aws_eks_access_entry" "karpenter_node" {
   cluster_name  = var.cluster_name
   principal_arn = var.karpenter_node_role_arn
@@ -135,14 +101,6 @@ resource "aws_eks_access_entry" "karpenter_node" {
 }
 
 # ── EC2NodeClass + NodePool: what Karpenter is actually allowed to provision ─
-# Was applied by ArgoCD from gitops (apps/{env}/karpenter-nodepool.yaml) —
-# moved here so it's created automatically by the same terragrunt apply that
-# installs Karpenter itself, no gitops sync required. Uses local-exec + raw
-# kubectl rather than the `kubernetes_manifest` resource, same reasoning as
-# ArgoCD's root bootstrap: both CRDs (EC2NodeClass, NodePool) are installed by
-# helm_release.karpenter in this same apply — on a truly fresh cluster neither
-# CRD exists yet when planning starts, which `kubernetes_manifest` can't
-# tolerate but raw kubectl doesn't care about.
 resource "null_resource" "karpenter_nodepool" {
   triggers = {
     manifest = join("\n---\n", [

@@ -2,8 +2,6 @@
 data "aws_caller_identity" "current" {}
 
 # ── Local: strip the ARN prefix to get the plain OIDC URL ───────────────────
-# e.g. arn:aws:iam::123:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/XXX
-#   →  oidc.eks.us-east-1.amazonaws.com/id/XXX
 locals {
   oidc_url = replace(
     var.oidc_provider_arn,
@@ -14,19 +12,18 @@ locals {
 
 # ── ALB Ingress Controller ───────────────────────────────────────────────────
 
-# Role — trusts only the alb-controller service account in kube-system namespace
 resource "aws_iam_role" "alb_controller" {
-  name = "${var.cluster_name}-alb-controller"  # e.g. "snapdf-dev-alb-controller"
+  name = "${var.cluster_name}-alb-controller"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Effect    = "Allow"
-      Principal = { Federated = var.oidc_provider_arn }  # trusts this cluster's OIDC provider
+      Principal = { Federated = var.oidc_provider_arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          "${local.oidc_url}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"  # locked to this exact service account
+          "${local.oidc_url}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
         }
       }
@@ -36,7 +33,6 @@ resource "aws_iam_role" "alb_controller" {
   tags = { Environment = var.env_name, ManagedBy = "terragrunt" }
 }
 
-# Policy — full official permissions the ALB controller needs to manage AWS load balancers
 resource "aws_iam_policy" "alb_controller" {
   name = "${var.cluster_name}-alb-controller"
 
@@ -71,7 +67,7 @@ resource "aws_iam_policy" "alb_controller" {
           "elasticloadbalancing:DescribeLoadBalancers",
           "elasticloadbalancing:DescribeLoadBalancerAttributes",
           "elasticloadbalancing:DescribeListeners",
-          "elasticloadbalancing:DescribeListenerAttributes", # newer API action — controller v2.8+ calls this on every reconcile; missing it broke IngressGroup reconciliation entirely after the 1.17.1 upgrade
+          "elasticloadbalancing:DescribeListenerAttributes",
           "elasticloadbalancing:DescribeListenerCertificates",
           "elasticloadbalancing:DescribeSSLPolicies",
           "elasticloadbalancing:DescribeRules",
@@ -137,7 +133,7 @@ resource "aws_iam_policy" "alb_controller" {
           "elasticloadbalancing:DeregisterTargets",
           "elasticloadbalancing:SetWebAcl",
           "elasticloadbalancing:ModifyListener",
-          "elasticloadbalancing:ModifyListenerAttributes", # paired with DescribeListenerAttributes above
+          "elasticloadbalancing:ModifyListenerAttributes",
           "elasticloadbalancing:AddListenerCertificates",
           "elasticloadbalancing:RemoveListenerCertificates",
           "elasticloadbalancing:ModifyRule"
@@ -148,27 +144,25 @@ resource "aws_iam_policy" "alb_controller" {
   })
 }
 
-# Attach the policy to the role
 resource "aws_iam_role_policy_attachment" "alb_controller" {
-  policy_arn = aws_iam_policy.alb_controller.arn  # the policy above
-  role       = aws_iam_role.alb_controller.name   # the role above
+  policy_arn = aws_iam_policy.alb_controller.arn
+  role       = aws_iam_role.alb_controller.name
 }
 
 # ── External Secrets Operator ────────────────────────────────────────────────
 
-# Role — trusts only the external-secrets service account in external-secrets namespace
 resource "aws_iam_role" "eso" {
-  name = "${var.cluster_name}-eso"  # e.g. "snapdf-dev-eso"
+  name = "${var.cluster_name}-eso"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Effect    = "Allow"
-      Principal = { Federated = var.oidc_provider_arn }  # trusts this cluster's OIDC provider
+      Principal = { Federated = var.oidc_provider_arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          "${local.oidc_url}:sub" = "system:serviceaccount:external-secrets:external-secrets"  # locked to ESO service account
+          "${local.oidc_url}:sub" = "system:serviceaccount:external-secrets:external-secrets"
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
         }
       }
@@ -178,7 +172,6 @@ resource "aws_iam_role" "eso" {
   tags = { Environment = var.env_name, ManagedBy = "terragrunt" }
 }
 
-# Policy — ESO only needs to read secrets, nothing else
 resource "aws_iam_policy" "eso" {
   name = "${var.cluster_name}-eso"
 
@@ -187,22 +180,20 @@ resource "aws_iam_policy" "eso" {
     Statement = [{
       Effect = "Allow"
       Action = [
-        "secretsmanager:GetSecretValue",   # read the secret value
-        "secretsmanager:DescribeSecret"    # read secret metadata (name, ARN, tags)
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
       ]
-      Resource = "*"  # all secrets in this account — can be scoped to specific ARNs later
+      Resource = "*"
     }]
   })
 }
 
-# Attach the policy to the role
 resource "aws_iam_role_policy_attachment" "eso" {
-  policy_arn = aws_iam_policy.eso.arn  # the policy above
-  role       = aws_iam_role.eso.name   # the role above
+  policy_arn = aws_iam_policy.eso.arn
+  role       = aws_iam_role.eso.name
 }
 
 # ── KEDA ─────────────────────────────────────────────────────────────────────
-# KEDA needs to read queue depth to decide how many worker pods to scale to
 
 resource "aws_iam_role" "keda" {
   name = "${var.cluster_name}-keda"
@@ -215,7 +206,7 @@ resource "aws_iam_role" "keda" {
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          "${local.oidc_url}:sub" = "system:serviceaccount:keda:keda-operator" # locked to KEDA operator service account
+          "${local.oidc_url}:sub" = "system:serviceaccount:keda:keda-operator"
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
         }
       }
@@ -232,8 +223,8 @@ resource "aws_iam_policy" "keda" {
     Version = "2012-10-17"
     Statement = [{
       Effect   = "Allow"
-      Action   = ["sqs:GetQueueAttributes"] # read queue depth — the only thing KEDA needs
-      Resource = var.signed_queue_arns      # every signed queue this cluster's namespaces use
+      Action   = ["sqs:GetQueueAttributes"]
+      Resource = var.signed_queue_arns
     }]
   })
 }
@@ -243,12 +234,7 @@ resource "aws_iam_role_policy_attachment" "keda" {
   role       = aws_iam_role.keda.name
 }
 
-# ── EBS CSI Driver (Phase 5 — Prometheus needs a real PersistentVolume) ──────
-# Nothing in this project needed a PVC before Prometheus. EKS's in-cluster
-# default "gp2" StorageClass points at the old in-tree kubernetes.io/aws-ebs
-# provisioner, removed from Kubernetes years ago — PVCs against it can never
-# bind. This role backs the actual CSI driver (ebs.csi.aws.com) that makes
-# dynamic EBS provisioning work at all now.
+# ── EBS CSI Driver ────────────────────────────────────────────────────────────
 resource "aws_iam_role" "ebs_csi" {
   name = "${var.cluster_name}-ebs-csi"
 
@@ -260,7 +246,7 @@ resource "aws_iam_role" "ebs_csi" {
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          "${local.oidc_url}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa" # the addon's own fixed SA name
+          "${local.oidc_url}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
         }
       }
@@ -270,27 +256,12 @@ resource "aws_iam_role" "ebs_csi" {
   tags = { Environment = var.env_name, ManagedBy = "terragrunt" }
 }
 
-# AWS-authored managed policy — same "use the official one" approach as the
-# worker role's EKS-managed policies, rather than hand-writing EBS permissions.
 resource "aws_iam_role_policy_attachment" "ebs_csi" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
   role       = aws_iam_role.ebs_csi.name
 }
 
 # ── PDF Worker ────────────────────────────────────────────────────────────────
-# Both signed and free workers share one IAM role — same permissions, different queue URLs via env vars.
-#
-# Least-privilege split (was: this one role also covered api/auth — see git history
-# for the removed StringLike entries and the wider policy that used to live here).
-# That happened as Bug 19's fix: pre-microservice-split there was one shared service
-# account, and when the split introduced separate api-*-sa/auth-*-sa/*-worker-*
-# accounts, the fastest fix under a live AccessDenied outage was widening this one
-# role's trust policy rather than cutting three properly-scoped roles. Verified
-# directly against api/app.py, auth/main.py, and worker/worker.py's actual boto3
-# calls (not guessed): auth makes zero AWS calls (no role at all, below); api only
-# ever sends to SQS and needs S3 read (for presigned URLs) + write (upload) — never
-# receives/deletes; worker is the only one that receives/deletes from SQS, and
-# never sends. This role now only grants what worker itself actually calls.
 resource "aws_iam_role" "worker" {
   name = "${var.cluster_name}-worker"
 
@@ -304,9 +275,6 @@ resource "aws_iam_role" "worker" {
         StringEquals = {
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
         }
-        # Generated per-namespace via var.app_namespaces so this works identically for the dev
-        # cluster (dev + staging) and the prod cluster (production) instead of hardcoding
-        # dev/staging regardless of which cluster applies this module (Bug 30 fix).
         StringLike = {
           "${local.oidc_url}:sub" = [for ns in var.app_namespaces : "system:serviceaccount:${ns}:*-worker-*"]
         }
@@ -326,18 +294,18 @@ resource "aws_iam_policy" "worker" {
       {
         Effect = "Allow"
         Action = [
-          "sqs:ReceiveMessage", # pick up a message from the queue
-          "sqs:DeleteMessage"   # delete it after processing
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage"
         ]
-        Resource = concat(var.signed_queue_arns, var.free_queue_arns) # every signed+free queue this cluster's namespaces use
+        Resource = concat(var.signed_queue_arns, var.free_queue_arns)
       },
       {
         Effect = "Allow"
         Action = [
-          "s3:GetObject", # download the uploaded input file
-          "s3:PutObject"  # upload the generated PDF
+          "s3:GetObject",
+          "s3:PutObject"
         ]
-        Resource = [for arn in var.bucket_arns : "${arn}/*"] # all objects inside every PDF bucket this cluster's namespaces use
+        Resource = [for arn in var.bucket_arns : "${arn}/*"]
       }
     ]
   })
@@ -349,10 +317,6 @@ resource "aws_iam_role_policy_attachment" "worker" {
 }
 
 # ── API ───────────────────────────────────────────────────────────────────────
-# Split out from the shared worker role (see comment above) — api only ever sends
-# a job onto the queue and needs S3 read/write (upload the input file, and
-# s3:GetObject so the presigned download URLs it generates are actually valid
-# when fetched). Never receives or deletes from SQS.
 resource "aws_iam_role" "api" {
   name = "${var.cluster_name}-api"
 
@@ -384,14 +348,14 @@ resource "aws_iam_policy" "api" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["sqs:SendMessage"] # enqueue a job — never receives or deletes
+        Action   = ["sqs:SendMessage"]
         Resource = concat(var.signed_queue_arns, var.free_queue_arns)
       },
       {
         Effect = "Allow"
         Action = [
-          "s3:PutObject", # upload the user's input file
-          "s3:GetObject"  # required for its own presigned GET URLs to be valid when fetched
+          "s3:PutObject",
+          "s3:GetObject"
         ]
         Resource = [for arn in var.bucket_arns : "${arn}/*"]
       }
@@ -405,18 +369,11 @@ resource "aws_iam_role_policy_attachment" "api" {
 }
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
-# Deliberately no IAM role at all — auth/main.py makes zero boto3 calls (confirmed
-# by reading the source, not assumed). It used to ride on the shared worker role
-# purely as a side effect of Bug 19's fix, carrying SQS/S3 permissions it never
-# once exercised. Its gitops values.yaml no longer sets serviceAccount.roleArn,
-# so it gets a plain ServiceAccount with no AWS credentials whatsoever.
+# Deliberately no IAM role — auth makes no AWS calls and gets a plain
+# ServiceAccount with no credentials.
 
 # ── Karpenter ─────────────────────────────────────────────────────────────────
-# Two roles: one for the Karpenter controller pod (IRSA, calls the EC2 API to
-# launch/terminate nodes), one for the actual EC2 instances Karpenter launches
-# (the "node role" every Karpenter-provisioned node runs as).
 
-# Controller role — trusts only the karpenter service account
 resource "aws_iam_role" "karpenter_controller" {
   name = "${var.cluster_name}-karpenter-controller"
 
@@ -428,14 +385,6 @@ resource "aws_iam_role" "karpenter_controller" {
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          # Karpenter's own controller moved off the managed node group onto a
-          # dedicated Fargate profile, into its own "karpenter" namespace (not
-          # kube-system — Fargate profiles match by namespace, and kube-system
-          # also holds DaemonSets/host-networked pods that can't run on
-          # Fargate at all). Confirmed live: with this still pointed at
-          # kube-system, AssumeRoleWithWebIdentity came back 403 AccessDenied
-          # — the OIDC subject in the real token (karpenter:karpenter) didn't
-          # match what this trust policy allowed.
           "${local.oidc_url}:sub" = "system:serviceaccount:karpenter:karpenter"
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
         }
@@ -453,7 +402,7 @@ resource "aws_iam_policy" "karpenter_controller" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "EC2ReadOnly" # read-only discovery — safe to scope broadly
+        Sid    = "EC2ReadOnly"
         Effect = "Allow"
         Action = [
           "ec2:DescribeInstances",
@@ -469,7 +418,7 @@ resource "aws_iam_policy" "karpenter_controller" {
         Resource = "*"
       },
       {
-        Sid    = "EC2NodeLifecycle" # create/tag/terminate the actual nodes Karpenter provisions
+        Sid    = "EC2NodeLifecycle"
         Effect = "Allow"
         Action = [
           "ec2:CreateLaunchTemplate",
@@ -482,7 +431,7 @@ resource "aws_iam_policy" "karpenter_controller" {
         Resource = "*"
       },
       {
-        Sid      = "PassNodeRoleOnly" # scoped tightly -- PassRole is a privilege-escalation vector if left wildcard
+        Sid      = "PassNodeRoleOnly"
         Effect   = "Allow"
         Action   = "iam:PassRole"
         Resource = aws_iam_role.karpenter_node.arn
@@ -494,13 +443,13 @@ resource "aws_iam_policy" "karpenter_controller" {
         Resource = "*"
       },
       {
-        Sid      = "AMIResolution" # Karpenter looks up current EKS-optimized AMI IDs via SSM public parameters
+        Sid      = "AMIResolution"
         Effect   = "Allow"
         Action   = "ssm:GetParameter"
         Resource = "*"
       },
       {
-        Sid      = "SpotPricing" # used for On-Demand/Spot price comparison even when only On-Demand is allowed
+        Sid      = "SpotPricing"
         Effect   = "Allow"
         Action   = "pricing:GetProducts"
         Resource = "*"
@@ -514,9 +463,6 @@ resource "aws_iam_role_policy_attachment" "karpenter_controller" {
   role       = aws_iam_role.karpenter_controller.name
 }
 
-# Node role — the role every EC2 instance Karpenter launches actually runs as.
-# Uses AWS's standard managed policies for EKS worker nodes (same requirements
-# any EKS node needs, Karpenter-provisioned or not).
 resource "aws_iam_role" "karpenter_node" {
   name = "${var.cluster_name}-karpenter-node"
 
@@ -544,8 +490,6 @@ resource "aws_iam_role_policy_attachment" "karpenter_node" {
   role       = aws_iam_role.karpenter_node.name
 }
 
-# Instance profile — EC2 instances need this wrapper around the role, not the
-# bare role itself. Karpenter's EC2NodeClass references this by name.
 resource "aws_iam_instance_profile" "karpenter_node" {
   name = "${var.cluster_name}-karpenter-node"
   role = aws_iam_role.karpenter_node.name

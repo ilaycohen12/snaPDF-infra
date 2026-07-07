@@ -12,11 +12,6 @@ provider "helm" {
 }
 
 # ── KEDA ──────────────────────────────────────────────────────────────────────
-# Requires kube-prometheus-stack's ServiceMonitor CRD to already exist (the
-# prometheus.operator.enabled settings below make this chart create its own
-# ServiceMonitor) — enforced via this module's terragrunt.hcl `dependency` on
-# the observability module, not a Terraform depends_on (that only works within
-# a single state; kube_prometheus_stack now lives in a different module/state).
 resource "helm_release" "keda" {
   name             = "keda"
   repository       = "https://kedacore.github.io/charts"
@@ -36,13 +31,6 @@ resource "helm_release" "keda" {
     value = var.keda_role_arn
   }
 
-  # Lets Prometheus graph real scaler activity/queue-depth decisions — turns
-  # "KEDA scaled signed-worker 0->3" from an assertion into an actual panel.
-  # NOTE: the chart's ServiceMonitor templates require BOTH keys true —
-  # {{- if and .Values.prometheus.operator.enabled .Values.prometheus.operator.serviceMonitor.enabled }}
-  # (confirmed directly from the chart source) — setting only one half (either
-  # the top-level .enabled, tried first, or only .serviceMonitor.enabled, tried
-  # second) silently renders nothing, no error either way.
   set {
     name  = "prometheus.operator.enabled"
     value = "true"

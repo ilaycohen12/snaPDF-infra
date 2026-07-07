@@ -6,9 +6,6 @@ terraform {
   source = "../../../modules/keda"
 }
 
-# Needs alb_controller (addons) ready, and needs kube_prometheus_stack
-# (observability) already installed — its ServiceMonitor CRD is what
-# prometheus.operator.enabled below relies on.
 dependencies {
   paths = ["../addons", "../observability"]
 }

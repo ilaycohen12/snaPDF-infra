@@ -1,31 +1,31 @@
 locals {
-  env = read_terragrunt_config(find_in_parent_folders("env.hcl")) # reads dev/env.hcl
+  env = read_terragrunt_config(find_in_parent_folders("env.hcl"))
 }
 
 include "root" {
-  path = find_in_parent_folders() # inherits S3 backend + provider from infra/terragrunt.hcl
+  path = find_in_parent_folders()
 }
 
 terraform {
-  source = "../../../modules/eks" # points to infra/modules/eks
+  source = "../../../modules/eks"
 }
 
 dependency "vpc" {
-  config_path = "../vpc" # reads vpc outputs from S3 state
+  config_path = "../vpc"
 
   mock_outputs = {
-    vpc_id             = "vpc-00000000000000000"        # fake VPC ID for plan/validate
-    private_subnet_ids = ["subnet-00000000000000000",   # fake subnet IDs for plan/validate
+    vpc_id             = "vpc-00000000000000000"
+    private_subnet_ids = ["subnet-00000000000000000",
                           "subnet-11111111111111111"]
   }
 
-  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"] # use mocks only during plan/validate, never during apply
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "destroy"]
 }
 
 inputs = {
-  env_name           = local.env.locals.env_name            # "dev"
-  cluster_name       = local.env.locals.cluster_name        # "snapdf-dev"
-  node_instance_type = local.env.locals.node_instance_type  # "t3.small"
-  vpc_id             = dependency.vpc.outputs.vpc_id        # real value from vpc state during apply
-  private_subnet_ids = dependency.vpc.outputs.private_subnet_ids # real value from vpc state during apply
+  env_name           = local.env.locals.env_name
+  cluster_name       = local.env.locals.cluster_name
+  node_instance_type = local.env.locals.node_instance_type
+  vpc_id             = dependency.vpc.outputs.vpc_id
+  private_subnet_ids = dependency.vpc.outputs.private_subnet_ids
 }

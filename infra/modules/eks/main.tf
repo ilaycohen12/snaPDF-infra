@@ -1,26 +1,21 @@
+# -----EKS Cluster-----
 module "eks" {
-  source  = "terraform-aws-modules/eks/aws"  # official community module
+  source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.0"
 
-  cluster_name    = var.cluster_name          # e.g. "snapdf-dev"
-  cluster_version = "1.31"                    # Kubernetes version
+  cluster_name    = var.cluster_name
+  cluster_version = "1.31"
 
-  vpc_id     = var.vpc_id                     # which VPC to put the cluster in
-  subnet_ids = var.private_subnet_ids         # worker nodes go in private subnets
+  vpc_id     = var.vpc_id
+  subnet_ids = var.private_subnet_ids
 
-  cluster_endpoint_public_access           = true  # lets you run kubectl from your laptop
-  enable_irsa                              = true  # enables OIDC — required for ESO and ALB controller
-  enable_cluster_creator_admin_permissions = true  # gives you kubectl admin access after apply
+  cluster_endpoint_public_access           = true
+  enable_irsa                              = true
+  enable_cluster_creator_admin_permissions = true
 
-  # VPC CNI explicitly managed here (was previously left as AWS's untracked default).
-  # Prefix delegation raises pod density per node from ~17 (one IP per pod, limited by
-  # each node's ENIs) to well over 100, by handing out /28 blocks of 16 IPs at a time
-  # instead of one IP at a time. kubelet's own max-pods is capped separately below at 35
-  # — a deliberate ceiling for near-term headroom (Karpenter, Prometheus/Grafana), not
-  # the raw maximum the CNI could technically support.
   cluster_addons = {
     vpc-cni = {
-      before_compute = true # install before nodes launch, so they boot with the right CNI config
+      before_compute = true
       configuration_values = jsonencode({
         env = {
           ENABLE_PREFIX_DELEGATION = "true"
@@ -32,28 +27,14 @@ module "eks" {
 
   eks_managed_node_groups = {
     default = {
-      name           = "${var.cluster_name}-nodes"  # e.g. "snapdf-dev-nodes"
-      instance_types = [var.node_instance_type]     # ["t3.medium"]
-      # infra #24: shrunk from min=1/max=3/desired=2 now that Karpenter is proven
-      # (real scale-up/scale-down watched live on both dev and prod, Phase 6/v0.7.0).
-      # This group is now just a fixed floor — somewhere for CoreDNS, the ALB
-      # Controller, and Karpenter's own controller pod to run even before Karpenter
-      # has provisioned anything itself — not a second source of elasticity.
-      # Karpenter's NodePool (6 vCPU/12GiB dev, 9 vCPU/18GiB prod) owns all real
-      # demand above this floor now.
-      min_size       = 1                            # never zero — Karpenter itself needs somewhere to run
+      name           = "${var.cluster_name}-nodes"
+      instance_types = [var.node_instance_type]
+      min_size       = 1
       max_size       = 1
       desired_size   = 1
 
-      # Explicit, not left to default — the module only generates nodeadm-format user
-      # data (required for cloudinit_pre_nodeadm below to actually take effect) when
-      # ami_type is explicitly AL2023_*. Left as null/default, it silently falls back
-      # to the legacy bootstrap.sh format and ignores cloudinit_pre_nodeadm entirely.
       ami_type = "AL2023_x86_64_STANDARD"
 
-      # Amazon Linux 2023 nodes use nodeadm, configured via a NodeConfig document
-      # injected before nodeadm runs. This overrides kubelet's default max-pods
-      # (normally auto-calculated from instance type + CNI) with our own ceiling.
       cloudinit_pre_nodeadm = [
         {
           content_type = "application/node.eks.aws"
@@ -86,31 +67,13 @@ module "eks" {
   }
 
   tags = {
-    Environment = var.env_name   # "dev" or "prod"
+    Environment = var.env_name
     Project     = "snapdf"
     ManagedBy   = "terragrunt"
   }
 }
 
-# The module's own default node_security_group_additional_rules only lets
-# CoreDNS traffic in from the node security group itself (self-referencing) —
-# fine as long as every pod that needs DNS runs on the managed node group.
-# Karpenter's Fargate profile breaks that assumption: Fargate pods get ENIs in
-# AWS's own auto-created implicit "cluster security group" (what
-# `aws eks describe-cluster` reports as `clusterSecurityGroupId`), not the
-# node security group, so their DNS queries to CoreDNS were being silently
-# dropped at the node SG's ingress rule. Confirmed live: `nslookup` from a
-# debug pod on the same Fargate profile timed out ("no servers could be
-# reached"), which is why Karpenter's own controller crash-looped — its EC2
-# API connectivity check couldn't resolve sts.us-east-1.amazonaws.com at all.
-#
-# Standalone resources, not the module's own `node_security_group_additional_
-# rules` input — that shorthand's `source_cluster_security_group = true`
-# resolves to a *different* SG the module itself creates
-# (`aws_security_group.cluster`), not the AWS-implicit one Fargate actually
-# attaches to pod ENIs. The real one is only known via `module.eks`'s own
-# `cluster_primary_security_group_id` *output*, which can't be fed back in as
-# one of the same module's own inputs (circular reference) — has to live here.
+# -----CoreDNS access for Karpenter Fargate profile-----
 resource "aws_security_group_rule" "node_ingress_cluster_coredns_tcp" {
   description              = "Cluster/Fargate SG to node CoreDNS TCP"
   type                     = "ingress"
@@ -131,10 +94,7 @@ resource "aws_security_group_rule" "node_ingress_cluster_coredns_udp" {
   source_security_group_id = module.eks.cluster_primary_security_group_id
 }
 
-# Karpenter discovers which subnets it's allowed to launch nodes into via this
-# tag (referenced in the EC2NodeClass's subnetSelectorTerms) — existing tags
-# (Environment, Project) aren't precise enough on their own since they also
-# match the public and database subnets, not just the private ones nodes go in.
+# -----Karpenter subnet discovery tag-----
 resource "aws_ec2_tag" "karpenter_subnet_discovery" {
   for_each = toset(var.private_subnet_ids)
 

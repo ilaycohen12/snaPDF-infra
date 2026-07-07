@@ -1,16 +1,16 @@
 locals {
-  env = read_terragrunt_config(find_in_parent_folders("env.hcl")) # reads dev/env.hcl
+  env = read_terragrunt_config(find_in_parent_folders("env.hcl"))
 }
 
 include "root" {
-  path = find_in_parent_folders() # inherits S3 backend + provider from infra/terragrunt.hcl
+  path = find_in_parent_folders()
 }
 
 terraform {
-  source = "../../../modules/s3" # points to infra/modules/s3
+  source = "../../../modules/s3"
 }
 
 inputs = {
-  env_name       = local.env.locals.env_name # "dev"
+  env_name       = local.env.locals.env_name
   app_namespaces = ["dev", "staging"]
 }
