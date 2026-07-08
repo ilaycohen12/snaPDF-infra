@@ -172,9 +172,19 @@ resource "helm_release" "argocd" {
     value = ""
   }
 
+  # Dex's github connector does not put the username in the OIDC "sub" claim
+  # despite useLoginAsID (it stays an opaque per-connector ID) — email is the
+  # claim that's actually reliable, so RBAC needs "email" in scopes to even
+  # consider it, and policy.csv matches on email (username kept as a harmless
+  # redundant rule in case sub ever does carry the username).
+  set {
+    name  = "configs.rbac.scopes"
+    value = "[groups\\, email]"
+  }
+
   set {
     name  = "configs.rbac.policy\\.csv"
-    value = "g\\, ${var.sso_github_username}\\, role:admin"
+    value = "g\\, ${var.sso_github_username}\\, role:admin\ng\\, ${var.sso_github_email}\\, role:admin"
   }
 }
 

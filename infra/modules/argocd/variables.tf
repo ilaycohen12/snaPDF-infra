@@ -50,6 +50,11 @@ variable "github_oauth_client_secret" {
 }
 
 variable "sso_github_username" {
-  description = "The only GitHub login granted role:admin in ArgoCD's RBAC policy — policy.default is empty, so anyone else who authenticates via GitHub gets zero permissions"
+  description = "GitHub username granted role:admin in ArgoCD's RBAC policy — kept as a redundant match alongside email, since Dex's github connector does not reliably put the username in the \"sub\" claim despite useLoginAsID"
+  type        = string
+}
+
+variable "sso_github_email" {
+  description = "GitHub account email granted role:admin in ArgoCD's RBAC policy — this is the reliable match, since Dex issues an opaque \"sub\" claim for GitHub logins but always includes a real email claim. policy.default is empty, so anyone else who authenticates via GitHub gets zero permissions"
   type        = string
 }

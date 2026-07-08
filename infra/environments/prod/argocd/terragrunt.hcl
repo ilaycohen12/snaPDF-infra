@@ -48,4 +48,5 @@ inputs = {
   github_pat_secret_arn              = dependency.global.outputs.github_pat_secret_arn
   github_oauth_client_id             = "Ov23liwwOlYPI8qRBUzA"
   sso_github_username                = "ilaycohen12"
+  sso_github_email                   = "ilaycohen456@gmail.com"
 }
